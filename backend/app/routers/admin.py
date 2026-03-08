@@ -4,7 +4,7 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_roles
 from app.schemas.common import success_response, error_response, serialize_doc
 from app.schemas.admin import BanBody, VerifySupplierBody
-from app.services.supplier_score import recalculate_supplier_score
+from app.services.supplier_score import recalculate_supplier_score, get_supplier_score_for_response
 
 router = APIRouter(dependencies=[Depends(require_roles("admin"))])
 
@@ -52,6 +52,20 @@ async def get_users(request: Request, user: dict = Depends(get_current_user)):
     db = get_db()
     cursor = db.users.find({}, projection={"password": 0}).sort("createdAt", -1)
     users = [serialize_doc(u) async for u in cursor]
+    for u in users:
+        if u.get("role") != "seller":
+            continue
+        raw_id = u.get("_id") or u.get("id")
+        if not raw_id:
+            continue
+        try:
+            seller_oid = ObjectId(str(raw_id))
+            score = await get_supplier_score_for_response(seller_oid)
+            if score:
+                u["trustScore"] = score.get("total_score", 0)
+                u["trustLevel"] = score.get("trust_level", "Low Trust")
+        except Exception:
+            pass
     return success_response(data={"users": users})
 
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Minus, Plus, Send, MapPin, Shield, Clock } from 'lucide-react';
+import { Minus, Plus, Send, MapPin, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { productsApi, inquiriesApi } from '../api/client';
 import { getCategoryImage } from '../utils/getCategoryImage';
@@ -117,40 +117,48 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Supplier card (placeholder) */}
-      <Card className="mt-8">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <span className="font-medium">Supplier info</span>
-          <Badge variant="success">Verified</Badge>
-        </CardHeader>
-        <CardBody className="grid sm:grid-cols-3 gap-4">
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-primary-100 p-2">
-              <Shield className="h-5 w-5 text-primary-600" />
+      {/* Supplier card – trust score and verification */}
+      {product.seller && (
+        <Card className="mt-8">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <span className="font-medium">Supplier info</span>
+            {product.seller.isVerifiedSupplier ? (
+              <Badge variant="success">Verified</Badge>
+            ) : (
+              <Badge variant="default">Unverified</Badge>
+            )}
+          </CardHeader>
+          <CardBody className="grid sm:grid-cols-3 gap-4">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-primary-100 p-2">
+                <Shield className="h-5 w-5 text-primary-600" />
+              </div>
+              <div>
+                <p className="text-xs text-neutral-500">Trust score</p>
+                <p className="font-semibold">
+                  {product.seller.trustScore != null ? `${Math.round(product.seller.trustScore)}%` : '—'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-neutral-500">Trust score</p>
-              <p className="font-semibold">78/100</p>
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-primary-100 p-2">
+                <Shield className="h-5 w-5 text-primary-600" />
+              </div>
+              <div>
+                <p className="text-xs text-neutral-500">Trust level</p>
+                <p className="font-semibold">{product.seller.trustLevel || '—'}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-primary-100 p-2">
-              <Clock className="h-5 w-5 text-primary-600" />
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-emerald-500" />
+              <div>
+                <p className="text-xs text-neutral-500">Verification</p>
+                <p className="font-semibold">{product.seller.isVerifiedSupplier ? 'Verified' : 'Pending'}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-neutral-500">Response time</p>
-              <p className="font-semibold">Within 24h</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-emerald-500" />
-            <div>
-              <p className="text-xs text-neutral-500">Verification</p>
-              <p className="font-semibold">Verified</p>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      )}
 
       {/* Inquiry form */}
       {user?.role === 'buyer' && (

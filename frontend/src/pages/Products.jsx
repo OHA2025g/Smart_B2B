@@ -237,8 +237,8 @@ export default function Products() {
                         <div className="mt-2 flex flex-wrap gap-2 items-center">
                           {p.seller?.isVerifiedSupplier && <Badge variant="success">Verified Supplier</Badge>}
                           {p.seller?.trustScore != null && (
-                            <span className="text-xs text-neutral-600" title={`Trust: ${p.seller?.trustLevel || ''}`}>
-                              Trust {p.seller.trustScore}%
+                            <span className="text-xs text-neutral-600" title={`Trust level: ${p.seller?.trustLevel || ''}`}>
+                              Trust {Math.round(p.seller.trustScore)}%
                             </span>
                           )}
                         </div>

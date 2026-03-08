@@ -83,8 +83,8 @@ export default function AdminPanel() {
   const handleVerify = async (userId, verified) => {
     try {
       await adminApi.verifySupplier(userId, verified);
-      setUsers((prev) => prev.map((u) => (u._id === userId ? { ...u, isVerifiedSupplier: verified } : u)));
       toast.add(verified ? 'Supplier verified' : 'Verification removed', 'success');
+      load(); // refresh so trust score updates
     } catch {
       toast.add('Action failed', 'error');
     }
@@ -170,6 +170,7 @@ export default function AdminPanel() {
                 <tr className="border-b">
                   <th className="text-left p-3">Name</th>
                   <th className="text-left p-3">Email</th>
+                  <th className="text-left p-3">Trust score</th>
                   <th className="text-left p-3">Verified</th>
                   <th className="text-left p-3">Actions</th>
                 </tr>
@@ -179,6 +180,10 @@ export default function AdminPanel() {
                   <tr key={u._id} className="border-b">
                     <td className="p-3">{u.name}</td>
                     <td className="p-3">{u.email}</td>
+                    <td className="p-3">
+                      {u.trustScore != null ? `${Math.round(u.trustScore)}%` : '—'}
+                      {u.trustLevel && <span className="text-neutral-500 text-xs ml-1">({u.trustLevel})</span>}
+                    </td>
                     <td className="p-3">{u.isVerifiedSupplier ? <Badge variant="success">Verified</Badge> : <Badge variant="default">Pending</Badge>}</td>
                     <td className="p-3 flex gap-2">
                       <Button size="sm" variant="secondary" onClick={() => handleVerify(u._id, !u.isVerifiedSupplier)}>
@@ -203,6 +208,7 @@ export default function AdminPanel() {
                   <th className="text-left p-3">Name</th>
                   <th className="text-left p-3">Email</th>
                   <th className="text-left p-3">Role</th>
+                  <th className="text-left p-3">Trust score</th>
                   <th className="text-left p-3">Status</th>
                   <th className="text-left p-3">Actions</th>
                 </tr>
@@ -213,6 +219,10 @@ export default function AdminPanel() {
                     <td className="p-3">{u.name}</td>
                     <td className="p-3">{u.email}</td>
                     <td className="p-3">{u.role}</td>
+                    <td className="p-3">
+                      {u.role === 'seller' && (u.trustScore != null ? `${Math.round(u.trustScore)}% (${u.trustLevel || '—'})` : '—')}
+                      {u.role !== 'seller' && '—'}
+                    </td>
                     <td className="p-3">
                       {u.isBanned && <Badge variant="danger">Banned</Badge>}
                       {u.role === 'seller' && u.isVerifiedSupplier && <Badge variant="success">Verified</Badge>}
