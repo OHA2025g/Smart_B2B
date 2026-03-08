@@ -8,12 +8,12 @@ export function EmptyState({ icon: Icon, title, description, action }) {
       className="flex flex-col items-center justify-center py-12 px-4 text-center"
     >
       {Icon && (
-        <div className="rounded-full bg-neutral-100 p-4 mb-4 text-neutral-400">
-          <Icon className="h-10 w-10" />
+        <div className="rounded-2xl bg-teal-100 p-5 mb-4 text-teal-600">
+          <Icon className="h-12 w-12" />
         </div>
       )}
-      <h3 className="text-lg font-medium text-neutral-900">{title}</h3>
-      {description && <p className="mt-1 text-sm text-neutral-500 max-w-sm">{description}</p>}
+      <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+      {description && <p className="mt-2 text-sm text-slate-500 max-w-sm">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </motion.div>
   );

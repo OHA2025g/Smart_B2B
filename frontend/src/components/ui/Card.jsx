@@ -4,9 +4,9 @@ export function Card({ children, className = '', hover = false, ...props }) {
   const Comp = motion.div;
   return (
     <Comp
-      className={`bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden ${className}`}
+      className={`bg-white rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/30 overflow-hidden hover:border-teal-200/80 ${className}`}
       initial={false}
-      whileHover={hover ? { y: -2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' } : undefined}
+      whileHover={hover ? { y: -6, boxShadow: '0 24px 48px -16px rgb(0 0 0 / 0.14)', transition: { duration: 0.2 } } : undefined}
       transition={{ duration: 0.2 }}
       {...props}
     >

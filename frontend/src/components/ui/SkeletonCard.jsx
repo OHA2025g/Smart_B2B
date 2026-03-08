@@ -5,7 +5,7 @@ export function SkeletonCard() {
     <motion.div
       initial={{ opacity: 0.6 }}
       animate={{ opacity: 1 }}
-      className="bg-white rounded-xl border border-neutral-200 overflow-hidden"
+      className="bg-white rounded-2xl border border-neutral-200 overflow-hidden"
     >
       <div className="h-40 bg-neutral-200 animate-pulse" />
       <div className="p-4 space-y-3">

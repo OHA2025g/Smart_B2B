@@ -13,17 +13,6 @@ import { SkeletonCard } from '../components/ui/SkeletonCard';
 import { EmptyState } from '../components/ui/EmptyState';
 import { getCategoryImage } from '../utils/getCategoryImage';
 
-const HeroPattern = () => (
-  <svg className="absolute inset-0 h-full w-full text-primary-500/5" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-        <path d="M0 32V0h32" fill="none" stroke="currentColor" strokeWidth="0.5" />
-      </pattern>
-    </defs>
-    <rect width="100%" height="100%" fill="url(#grid)" />
-  </svg>
-);
-
 export default function Products() {
   const { user } = useAuth();
   const toast = useToast();
@@ -112,13 +101,23 @@ export default function Products() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 text-white px-6 py-12 mb-8">
-        <HeroPattern />
-        <div className="relative">
-          <h1 className="text-3xl font-bold mb-2">Find products</h1>
-          <p className="text-primary-100">Search by category, location or keyword</p>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-3xl bg-slate-900 text-white px-6 py-12 sm:py-14 mb-8 shadow-xl"
+      >
+        <div className="absolute inset-0 bg-mesh-dark bg-mesh opacity-90" />
+        <div className="absolute top-0 right-0 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-6">
+          <div className="hidden sm:flex h-16 w-16 rounded-2xl bg-teal-500/30 items-center justify-center shrink-0">
+            <Package className="h-9 w-9 text-teal-200" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-3xl sm:text-4xl font-extrabold mb-1">Find products</h1>
+            <p className="text-slate-400">Search by category, location or keyword</p>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Category chips */}
       {categories.length > 0 && (
@@ -126,7 +125,7 @@ export default function Products() {
           <button
             type="button"
             onClick={() => handleCategoryChip('')}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium ${!category ? 'bg-primary-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${!category ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/25' : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-300 hover:text-teal-600 hover:shadow-md'}`}
           >
             All
           </button>
@@ -135,7 +134,7 @@ export default function Products() {
               key={c._id}
               type="button"
               onClick={() => handleCategoryChip(c.name)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium ${category === c.name ? 'bg-primary-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${category === c.name ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/25' : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-300 hover:text-teal-600 hover:shadow-md'}`}
             >
               {c.name}
             </button>
@@ -166,7 +165,7 @@ export default function Products() {
             onChange={(e) => setCity(e.target.value)}
           />
         </div>
-        <Button type="submit" className="gap-2">
+        <Button type="submit" className="gap-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white border-0">
           <Filter className="h-4 w-4" />
           Filter
         </Button>
@@ -201,7 +200,7 @@ export default function Products() {
                   exit={{ opacity: 0 }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <Card hover className="h-full flex flex-col relative">
+                  <Card hover className="h-full flex flex-col relative group">
                     {user?.role === 'buyer' && (
                       <button
                         type="button"
@@ -211,14 +210,15 @@ export default function Products() {
                         <Heart className={`h-5 w-5 ${wishlistIds.has(p._id) ? 'fill-current' : ''}`} />
                       </button>
                     )}
-                    <Link to={`/product/${p._id}`} className="flex flex-col flex-1">
-                      <div className={`h-40 bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-2xl font-bold`}>
-                        {label.slice(0, 2)}
+                    <Link to={`/product/${p._id}`} className="flex flex-col flex-1 relative group">
+                      <div className={`h-44 bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-2xl font-bold relative overflow-hidden`}>
+                        <span className="relative z-10">{label.slice(0, 2)}</span>
+                        <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors duration-300" />
                       </div>
                       <div className="p-4 flex-1 flex flex-col">
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-neutral-900 line-clamp-2">{p.title}</h3>
-                          <Badge variant="primary">{p.category}</Badge>
+                          <h3 className="font-bold text-slate-900 line-clamp-2">{p.title}</h3>
+                          <Badge className="bg-teal-100 text-teal-700 border-0">{p.category}</Badge>
                         </div>
                         {p.city && (
                           <p className="mt-1 text-xs text-neutral-500 flex items-center gap-1">
@@ -226,7 +226,7 @@ export default function Products() {
                             {p.city}
                           </p>
                         )}
-                        <p className="mt-2 text-primary-600 font-semibold">
+                        <p className="mt-2 text-teal-600 font-bold">
                           ₹{p.price} <span className="text-neutral-500 font-normal text-sm">/ {p.unit}</span>
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-500">
@@ -246,7 +246,7 @@ export default function Products() {
                     </Link>
                     {user?.role === 'buyer' && (
                       <div className="p-4 border-t" onClick={(e) => e.stopPropagation()}>
-                        <Button size="sm" variant="secondary" className="w-full gap-2" onClick={(e) => handleAddToCart(e, p._id, p.minOrderQuantity || 1)}>
+                        <Button size="sm" className="w-full gap-2 bg-teal-600 hover:bg-teal-700 text-white border-0" onClick={(e) => handleAddToCart(e, p._id, p.minOrderQuantity || 1)}>
                           <ShoppingCart className="h-4 w-4" /> Add to RFQ Cart
                         </Button>
                       </div>

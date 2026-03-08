@@ -2,6 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-teal: 20 184 166;
+  --brand-teal-dark: 13 148 136;
+  --brand-coral: 244 63 94;
+  --brand-slate: 15 23 42;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  font-family: var(--font-sans);
+  @apply bg-slate-50 text-slate-900 antialiased;
+  overflow-x: hidden;
+}
+
+/* Subtle dot pattern - lighter so content pops */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgb(148 163 184 / 0.12) 1px, transparent 0);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+  }
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+  @apply outline-2 outline-offset-2 outline-teal-500;
 }

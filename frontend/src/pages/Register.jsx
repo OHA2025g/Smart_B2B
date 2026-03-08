@@ -44,26 +44,38 @@ export default function Register() {
       animate={{ opacity: 1 }}
       className="min-h-[70vh] flex items-center justify-center"
     >
-      <div className="w-full max-w-5xl flex flex-col lg:flex-row rounded-2xl border border-neutral-200 bg-white shadow-xl overflow-hidden">
+      <div className="w-full max-w-5xl flex flex-col lg:flex-row rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
         {/* Left: Brand panel */}
-        <div className="lg:w-2/5 bg-gradient-to-br from-primary-600 to-primary-800 text-white p-8 lg:p-12 flex flex-col justify-center">
-          <Link to="/" className="inline-flex items-center gap-2 text-white/90 hover:text-white mb-8">
+        <div className="lg:w-2/5 relative bg-gradient-to-br from-slate-900 via-teal-900/95 to-slate-900 text-white p-8 lg:p-12 flex flex-col justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-30" />
+          <Link to="/" className="relative inline-flex items-center gap-2 text-white/95 hover:text-white mb-8 transition-colors">
             <ShoppingBag className="h-8 w-8" />
             <span className="font-bold text-xl">SmartB2B</span>
           </Link>
-          <h2 className="text-2xl font-bold mb-4">Create an account</h2>
-          <p className="text-primary-100 mb-8">Join as a buyer or seller to get started.</p>
-          <ul className="space-y-4">
+          <h2 className="relative text-2xl font-bold mb-4">Create an account</h2>
+          <p className="relative text-slate-300 mb-8">Join as a buyer or seller to get started.</p>
+          <ul className="relative space-y-4">
             {benefits.map((b, i) => (
-              <li key={i} className="flex items-center gap-3">
-                <b.icon className="h-5 w-5 text-primary-200 shrink-0" />
-                <span className="text-sm text-primary-100">{b.text}</span>
-              </li>
+              <motion.li
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 * i }}
+                className="flex items-center gap-3"
+              >
+                <b.icon className="h-5 w-5 text-teal-300 shrink-0" />
+                <span className="text-sm text-slate-300">{b.text}</span>
+              </motion.li>
             ))}
           </ul>
         </div>
         {/* Right: Form */}
-        <div className="lg:w-3/5 p-8 lg:p-12 flex flex-col justify-center">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4 }}
+          className="lg:w-3/5 p-8 lg:p-12 flex flex-col justify-center"
+        >
           <h3 className="text-2xl font-semibold text-neutral-900 mb-2">Sign up</h3>
           <p className="text-neutral-500 mb-6">Fill in your details. Password must be at least 6 characters.</p>
           {error && (
@@ -83,8 +95,8 @@ export default function Register() {
                   onClick={() => setRole('buyer')}
                   className={`flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors ${
                     role === 'buyer'
-                      ? 'border-primary-600 bg-primary-50 text-primary-700'
-                      : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                      ? 'border-teal-600 bg-teal-50 text-teal-700'
+                      : 'border-slate-200 text-slate-600 hover:border-slate-300'
                   }`}
                 >
                   Buyer
@@ -94,8 +106,8 @@ export default function Register() {
                   onClick={() => setRole('seller')}
                   className={`flex-1 py-2.5 px-4 rounded-lg border-2 text-sm font-medium transition-colors ${
                     role === 'seller'
-                      ? 'border-primary-600 bg-primary-50 text-primary-700'
-                      : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                      ? 'border-teal-600 bg-teal-50 text-teal-700'
+                      : 'border-slate-200 text-slate-600 hover:border-slate-300'
                   }`}
                 >
                   Seller
@@ -109,11 +121,11 @@ export default function Register() {
           </form>
           <p className="mt-6 text-sm text-neutral-500">
             Already have an account?{' '}
-            <Link to="/login" className="text-primary-600 font-medium hover:underline">
+            <Link to="/login" className="text-teal-600 font-semibold hover:underline">
               Login
             </Link>
           </p>
-        </div>
+        </motion.div>
       </div>
     </motion.div>
   );

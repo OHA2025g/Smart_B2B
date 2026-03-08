@@ -80,8 +80,22 @@ export default function Dashboard() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <h1 className="text-2xl font-bold text-neutral-900 mb-1">Dashboard</h1>
-      <p className="text-neutral-500 mb-8">Hello, {user?.name}</p>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative rounded-2xl bg-slate-900 text-white p-6 sm:p-8 mb-8 shadow-xl overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-mesh-dark bg-mesh opacity-60" />
+        <div className="relative flex items-center gap-4">
+          <div className="h-14 w-14 rounded-xl bg-teal-500/30 flex items-center justify-center">
+            <Package className="h-8 w-8 text-teal-200" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Hello, {user?.name}</h1>
+            <p className="text-slate-400 text-sm mt-0.5">Here’s what’s happening on your dashboard.</p>
+          </div>
+        </div>
+      </motion.div>
 
       {user?.role === 'admin' && (adminSummary || adminDashboard) && (
         <>
