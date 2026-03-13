@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Package, MessageSquare, TrendingUp, Users, Activity, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { inquiriesApi, adminApi, rfqApi, cartApi, wishlistApi, ordersApi } from '../api/client';
+import { inquiriesApi, adminApi, rfqApi, cartApi, wishlistApi, ordersApi, buyerDashboardApi, sellerDashboardApi } from '../api/client';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { Badge } from '../components/ui/Badge';
@@ -17,6 +17,8 @@ export default function Dashboard() {
   const [adminDashboard, setAdminDashboard] = useState(null);
   const [buyerStats, setBuyerStats] = useState({ rfqs: 0, cartItems: 0, wishlistItems: 0 });
   const [sellerStats, setSellerStats] = useState({ rfqs: 0, orders: 0 });
+  const [buyerDashboard, setBuyerDashboard] = useState(null);
+  const [sellerDashboard, setSellerDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -31,22 +33,42 @@ export default function Dashboard() {
           setAdminSummary(summaryRes.data?.data?.summary ?? null);
           setAdminDashboard(dashboardRes.data?.data?.dashboard ?? null);
         } else if (user?.role === 'buyer') {
-          const [inqRes, rfqRes, cartRes, wishRes] = await Promise.all([
+          const [dashRes, inqRes] = await Promise.all([
+            buyerDashboardApi.get().then((r) => r.data.data?.dashboard).catch(() => null),
             inquiriesApi.getMe().then((r) => r.data.data.inquiries || []).catch(() => []),
-            rfqApi.getMy().then((r) => r.data.data.rfqs || []).catch(() => []),
-            cartApi.get().then((r) => r.data.data.items || []).catch(() => []),
-            wishlistApi.get().then((r) => r.data.data.items || []).catch(() => []),
           ]);
+          setBuyerDashboard(dashRes || null);
           setInquiries(inqRes);
-          setBuyerStats({ rfqs: rfqRes.length, cartItems: cartRes.length, wishlistItems: wishRes.length });
+          if (dashRes) {
+            setBuyerStats({
+              rfqs: dashRes.rfqsCreated ?? 0,
+              cartItems: dashRes.cartCount ?? 0,
+              wishlistItems: dashRes.wishlistCount ?? 0,
+            });
+          } else {
+            const [rfqRes, cartRes, wishRes] = await Promise.all([
+              rfqApi.getMy().then((r) => r.data.data.rfqs || []).catch(() => []),
+              cartApi.get().then((r) => r.data.data.items || []).catch(() => []),
+              wishlistApi.get().then((r) => r.data.data.items || []).catch(() => []),
+            ]);
+            setBuyerStats({ rfqs: rfqRes.length, cartItems: cartRes.length, wishlistItems: wishRes.length });
+          }
         } else if (user?.role === 'seller') {
-          const [inqRes, rfqRes, ordersRes] = await Promise.all([
+          const [dashRes, inqRes] = await Promise.all([
+            sellerDashboardApi.get().then((r) => r.data.data?.dashboard).catch(() => null),
             inquiriesApi.getMe().then((r) => r.data.data.inquiries || []).catch(() => []),
-            rfqApi.getAssigned().then((r) => r.data.data.rfqs || []).catch(() => []),
-            ordersApi.getMy().then((r) => r.data.data.orders || []).catch(() => []),
           ]);
+          setSellerDashboard(dashRes || null);
           setInquiries(inqRes);
-          setSellerStats({ rfqs: rfqRes.length, orders: ordersRes.length });
+          if (dashRes) {
+            setSellerStats({ rfqs: dashRes.activeRfqs ?? 0, orders: dashRes.ordersReceived ?? 0 });
+          } else {
+            const [rfqRes, ordersRes] = await Promise.all([
+              rfqApi.getAssigned().then((r) => r.data.data.rfqs || []).catch(() => []),
+              ordersApi.getMy().then((r) => r.data.data.orders || []).catch(() => []),
+            ]);
+            setSellerStats({ rfqs: rfqRes.length, orders: ordersRes.length });
+          }
         } else {
           const { data } = await inquiriesApi.getMe();
           setInquiries(data.data.inquiries || []);
@@ -101,7 +123,7 @@ export default function Dashboard() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
             <StatCard title="Users" value={adminDashboard?.totalUsers ?? adminSummary?.users ?? 0} icon={Users} />
-            <StatCard title="Products" value={adminSummary?.products ?? 0} icon={Package} />
+            <StatCard title="Products" value={adminDashboard?.totalProducts ?? adminSummary?.products ?? 0} icon={Package} />
             <StatCard title="Inquiries" value={adminSummary?.inquiries ?? 0} icon={MessageSquare} />
             {adminDashboard && (
               <>
@@ -111,14 +133,53 @@ export default function Dashboard() {
               </>
             )}
           </div>
+          {adminDashboard?.topSuppliers?.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader><span className="font-medium">Top suppliers</span></CardHeader>
+              <CardBody>
+                <ul className="space-y-2 text-sm">
+                  {adminDashboard.topSuppliers.slice(0, 5).map((s) => (
+                    <li key={s.sellerId} className="flex justify-between">
+                      <span>{s.name || s.email || s.sellerId}</span>
+                      <Badge variant={s.verified ? 'success' : 'default'}>{s.orderCount} orders · {s.trustScore} trust</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          )}
+          {adminDashboard?.topCategories?.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader><span className="font-medium">Top categories</span></CardHeader>
+              <CardBody>
+                <div className="flex flex-wrap gap-2">
+                  {adminDashboard.topCategories.slice(0, 8).map((c) => (
+                    <Badge key={c.name} variant="default">{c.name} ({c.count})</Badge>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+          {adminDashboard?.orderStatusDistribution && Object.keys(adminDashboard.orderStatusDistribution).length > 0 && (
+            <Card className="mb-6">
+              <CardHeader><span className="font-medium">Order status</span></CardHeader>
+              <CardBody>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(adminDashboard.orderStatusDistribution).map(([status, count]) => (
+                    <Badge key={status} variant="default">{status}: {count}</Badge>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          )}
           <Card className="mb-8">
             <CardHeader className="flex flex-row items-center justify-between">
-              <span className="font-medium">Recent activity</span>
-              <Badge variant="default">Placeholder</Badge>
+              <span className="font-medium">Recent logs</span>
+              <Link to="/admin/panel"><Badge variant="default">View all</Badge></Link>
             </CardHeader>
             <CardBody>
               <ul className="space-y-2 text-sm text-neutral-500">
-                <li>Activity feed can be wired to API in a future phase.</li>
+                <li>View Activity Logs tab for recent admin actions.</li>
               </ul>
             </CardBody>
           </Card>
@@ -132,18 +193,56 @@ export default function Dashboard() {
             <StatCard title="Pending" value={inquiries.filter((i) => i.status === 'pending').length} icon={Activity} />
             {user?.role === 'buyer' && (
               <>
-                <StatCard title="My RFQs" value={buyerStats.rfqs} icon={Activity} />
-                <StatCard title="Cart items" value={buyerStats.cartItems} icon={Package} />
+                <StatCard title="RFQs created" value={buyerStats.rfqs} icon={Activity} />
+                <StatCard title="Quotes received" value={buyerDashboard?.quotesReceived ?? '—'} icon={MessageSquare} />
+                <StatCard title="Orders placed" value={buyerDashboard?.ordersPlaced ?? '—'} icon={Package} />
+                <StatCard title="Cart" value={buyerStats.cartItems} icon={Package} />
                 <StatCard title="Wishlist" value={buyerStats.wishlistItems} icon={Package} />
               </>
             )}
             {user?.role === 'seller' && (
               <>
-                <StatCard title="Assigned RFQs" value={sellerStats.rfqs} icon={TrendingUp} />
-                <StatCard title="My orders" value={sellerStats.orders} icon={Package} />
+                <StatCard title="Products" value={sellerDashboard?.totalProducts ?? '—'} icon={Package} />
+                <StatCard title="Active RFQs" value={sellerStats.rfqs} icon={TrendingUp} />
+                <StatCard title="Quotes submitted" value={sellerDashboard?.totalQuotesSubmitted ?? '—'} icon={Activity} />
+                <StatCard title="Orders received" value={sellerStats.orders} icon={Package} />
               </>
             )}
           </div>
+          {user?.role === 'buyer' && (buyerDashboard?.recentRfqs?.length > 0 || buyerDashboard?.recentOrders?.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {buyerDashboard.recentRfqs?.length > 0 && (
+                <Card>
+                  <CardHeader><span className="font-medium">Recent RFQs</span></CardHeader>
+                  <CardBody>
+                    <ul className="space-y-2">
+                      {buyerDashboard.recentRfqs.slice(0, 5).map((r) => (
+                        <li key={r.id || r._id}>
+                          <Link to={`/rfq/${r.id || r._id}`} className="text-teal-600 hover:underline">RFQ #{String(r.id || r._id).slice(-6)}</Link>
+                          <Badge variant="default" className="ml-2">{r.status}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardBody>
+                </Card>
+              )}
+              {buyerDashboard.recentOrders?.length > 0 && (
+                <Card>
+                  <CardHeader><span className="font-medium">Recent orders</span></CardHeader>
+                  <CardBody>
+                    <ul className="space-y-2">
+                      {buyerDashboard.recentOrders.slice(0, 5).map((o) => (
+                        <li key={o.id || o._id}>
+                          <span className="font-medium">Order #{String(o.id || o._id).slice(-6)}</span>
+                          <Badge variant="default" className="ml-2">{o.status}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardBody>
+                </Card>
+              )}
+            </div>
+          )}
           <Card>
             <CardHeader>
               <h2 className="font-medium">

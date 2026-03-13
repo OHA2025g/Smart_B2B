@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShoppingBag, ArrowRight, Shield, Zap, Users, Package, CheckCircle, Sparkles, Quote } from 'lucide-react';
+import { ShoppingBag, ArrowRight, Shield, Zap, Users, Package, CheckCircle, Sparkles, Quote, FileText } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { categoriesApi, productsApi } from '../api/client';
 
 const container = {
   hidden: { opacity: 0 },
@@ -22,13 +24,36 @@ const features = [
   { icon: Users, title: 'B2B network', desc: 'Connect with buyers and sellers across industries', color: 'from-rose-500 to-pink-500', bg: 'bg-rose-500/10' },
 ];
 
-const stats = [
-  { label: 'Categories', value: '12+', sub: 'Industries' },
-  { label: 'Verified suppliers', value: '25+', sub: 'Trusted' },
-  { label: 'Products', value: '600+', sub: 'Listings' },
+const howItWorks = [
+  { step: 1, title: 'Browse', desc: 'Explore products and add to wishlist or RFQ cart' },
+  { step: 2, title: 'Add to RFQ cart', desc: 'Build your request for quote from cart or product pages' },
+  { step: 3, title: 'Receive quotes', desc: 'Suppliers submit quotes; compare price, delivery & trust' },
+  { step: 4, title: 'Compare & order', desc: 'Accept the best quote and place your order' },
 ];
 
 export default function Home() {
+  const [categories, setCategories] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [stats, setStats] = useState([
+    { label: 'Categories', value: '—', sub: 'Industries' },
+    { label: 'Suppliers', value: '—', sub: 'Trusted' },
+    { label: 'Products', value: '—', sub: 'Listings' },
+  ]);
+
+  useEffect(() => {
+    categoriesApi.list().then((r) => {
+      const cats = r.data.data?.categories || [];
+      setCategories(cats);
+      setStats((s) => [{ ...s[0], value: String(cats.length) }, s[1], s[2]]);
+    }).catch(() => {});
+    productsApi.list().then((r) => {
+      const list = r.data.data?.products || [];
+      setFeaturedProducts(list.slice(0, 8));
+      const total = list.length;
+      setStats((s) => [s[0], s[1], { ...s[2], value: String(total) }]);
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen">
       {/* Dark hero - contained so layout stays on screen */}
@@ -68,9 +93,9 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 max-w-4xl mx-auto leading-[1.1]"
           >
-            Smarter B2B.{' '}
+            Find Trusted Suppliers.{' '}
             <span className="bg-gradient-to-r from-teal-400 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
-              Real Deals.
+              Raise RFQs. Compare Quotes. Procure Better.
             </span>
           </motion.h1>
           <motion.p
@@ -79,7 +104,7 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.25 }}
             className="text-lg sm:text-xl text-slate-400 mb-12 max-w-2xl mx-auto"
           >
-            Find verified suppliers, send RFQs, and close deals—all in one place. No more spreadsheets.
+            B2B marketplace with verified suppliers, RFQ flow, and quote comparison—all in one place.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -92,16 +117,20 @@ export default function Home() {
                 size="lg"
                 className="gap-2 bg-coral-500 text-white hover:bg-coral-600 border-0 shadow-glow-coral hover:shadow-[0_0_50px_-12px_rgba(244,63,94,0.5)] transition-all duration-300 rounded-2xl px-8 py-4 text-base font-semibold group"
               >
-                Browse products
+                Browse Products
                 <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
-            <Link to="/register">
+            <Link to="/cart">
               <Button
-                variant="secondary"
                 size="lg"
                 className="gap-2 bg-white/10 text-white border border-white/20 hover:bg-white/15 backdrop-blur-sm rounded-2xl px-8 py-4"
               >
+                <FileText className="h-5 w-5" /> Create RFQ
+              </Button>
+            </Link>
+            <Link to="/register">
+              <Button variant="secondary" size="lg" className="gap-2 bg-white/5 text-white border border-white/10 rounded-2xl px-8 py-4">
                 Sign up free
               </Button>
             </Link>
@@ -117,7 +146,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Stats - negative margin to overlap hero feel */}
+      {/* Stats strip */}
       <motion.section
         initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -143,6 +172,77 @@ export default function Home() {
           ))}
         </div>
       </motion.section>
+
+      {/* Featured categories */}
+      {categories.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-6xl mx-auto px-4 sm:px-6 py-16"
+        >
+          <h2 className="text-2xl font-bold text-slate-900 mb-6">Featured categories</h2>
+          <div className="flex flex-wrap gap-3">
+            {categories.slice(0, 10).map((c) => (
+              <Link key={c.id || c._id} to={`/products?category=${encodeURIComponent(c.name || c.slug || '')}`}>
+                <span className="inline-block px-4 py-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 font-medium">
+                  {c.name}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {/* How it works */}
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="max-w-6xl mx-auto px-4 sm:px-6 py-16"
+      >
+        <h2 className="text-2xl font-bold text-slate-900 mb-8">How it works</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {howItWorks.map((h, i) => (
+            <div key={h.step} className="relative bg-white rounded-2xl border border-slate-200 p-6">
+              <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 font-bold flex items-center justify-center mb-3">{h.step}</div>
+              <h3 className="font-semibold text-slate-900">{h.title}</h3>
+              <p className="text-sm text-slate-500 mt-1">{h.desc}</p>
+              {i < howItWorks.length - 1 && (
+                <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-0.5 bg-slate-200" />
+              )}
+            </div>
+          ))}
+        </div>
+      </motion.section>
+
+      {/* Featured products */}
+      {featuredProducts.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-6xl mx-auto px-4 sm:px-6 py-16"
+        >
+          <h2 className="text-2xl font-bold text-slate-900 mb-6">Featured products</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {featuredProducts.map((p) => (
+              <Link key={p.id || p._id} to={`/product/${p.id || p._id}`}>
+                <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg hover:border-teal-200 transition-all">
+                  <p className="font-medium text-slate-900 truncate">{p.title}</p>
+                  <p className="text-teal-600 font-semibold mt-1">₹{p.price}</p>
+                  {p.category && <span className="text-xs text-slate-400">{p.category}</span>}
+                </div>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-6 text-center">
+            <Link to="/products">
+              <Button variant="secondary" className="rounded-xl">View all products</Button>
+            </Link>
+          </div>
+        </motion.section>
+      )}
 
       {/* Bento-style features */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-24">
@@ -247,6 +347,25 @@ export default function Home() {
           </div>
         </div>
       </motion.section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-200 bg-slate-50 mt-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Package className="h-6 w-6 text-teal-600" />
+              <span className="font-semibold text-slate-800">SmartB2B</span>
+            </div>
+            <div className="flex gap-6 text-sm text-slate-600">
+              <Link to="/products" className="hover:text-teal-600">Products</Link>
+              <Link to="/" className="hover:text-teal-600">How it works</Link>
+              <Link to="/register" className="hover:text-teal-600">Sign up</Link>
+              <Link to="/login" className="hover:text-teal-600">Log in</Link>
+            </div>
+          </div>
+          <p className="text-slate-500 text-sm mt-6">© SmartB2B — Intelligent B2B Marketplace. Find trusted suppliers, raise RFQs, compare quotes.</p>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -87,6 +87,8 @@ export const rfqApi = {
   getById: (id) => client.get(`${apiBase}/api/rfq/${id}`),
   updateStatus: (id, status) => client.put(`${apiBase}/api/rfq/${id}/status`, { status }),
   getQuotes: (rfqId) => client.get(`${apiBase}/api/rfq/${rfqId}/quotes`),
+  getQuoteComparison: (rfqId) => client.get(`${apiBase}/api/rfq/${rfqId}/quote-comparison`),
+  getTimeline: (rfqId) => client.get(`${apiBase}/api/rfq/${rfqId}/timeline`),
   submitQuote: (rfqId, data) => client.post(`${apiBase}/api/rfq/${rfqId}/quote`, data),
   acceptQuote: (rfqId, quoteId) => client.post(`${apiBase}/api/rfq/${rfqId}/accept-quote/${quoteId}`),
 };
@@ -98,6 +100,7 @@ export const quoteApi = {
 export const ordersApi = {
   getMy: () => client.get(`${apiBase}/api/orders/me`),
   getById: (id) => client.get(`${apiBase}/api/orders/${id}`),
+  getTimeline: (orderId) => client.get(`${apiBase}/api/orders/${orderId}/timeline`),
   updateStatus: (id, status) => client.put(`${apiBase}/api/orders/${id}/status`, { status }),
 };
 
@@ -112,16 +115,37 @@ export const adminApi = {
   getUsers: () => client.get(`${apiBase}/api/admin/users`),
   banUser: (id, banned) => client.put(`${apiBase}/api/admin/users/${id}/ban`, { banned }),
   unbanUser: (id) => client.put(`${apiBase}/api/admin/users/${id}/unban`),
-  verifySupplier: (id, verified) => client.put(`${apiBase}/api/admin/users/${id}/verify-supplier`, { verified }) ,
+  verifySupplier: (id, verified) => client.put(`${apiBase}/api/admin/users/${id}/verify-supplier`, { verified }),
   verifySupplierPost: (sellerId) => client.post(`${apiBase}/api/admin/suppliers/${sellerId}/verify`),
+  unverifySupplier: (sellerId) => client.put(`${apiBase}/api/admin/suppliers/${sellerId}/unverify`),
   recalculateScore: (sellerId) => client.post(`${apiBase}/api/admin/suppliers/${sellerId}/recalculate-score`),
+  getSuppliers: () => client.get(`${apiBase}/api/admin/suppliers`),
+  getCategories: () => client.get(`${apiBase}/api/admin/categories`),
   getRfqs: (params) => client.get(`${apiBase}/api/admin/rfqs`, { params }),
   getOrders: () => client.get(`${apiBase}/api/admin/orders`),
   getLogs: () => client.get(`${apiBase}/api/admin/logs`),
+  getAnalyticsOverview: () => client.get(`${apiBase}/api/admin/analytics/overview`),
+  getAnalyticsTopSuppliers: () => client.get(`${apiBase}/api/admin/analytics/top-suppliers`),
+  getAnalyticsCategoryPerformance: () => client.get(`${apiBase}/api/admin/analytics/category-performance`),
 };
 
 export const suppliersApi = {
   getScore: (sellerId) => client.get(`${apiBase}/api/suppliers/${sellerId}/score`),
+  getProfile: (sellerId) => client.get(`${apiBase}/api/suppliers/${sellerId}/profile`),
+};
+
+export const notificationsApi = {
+  getMe: () => client.get(`${apiBase}/api/notifications/me`),
+  markRead: (id) => client.put(`${apiBase}/api/notifications/${id}/read`),
+  markAllRead: () => client.put(`${apiBase}/api/notifications/read-all`),
+};
+
+export const sellerDashboardApi = {
+  get: () => client.get(`${apiBase}/api/seller/dashboard`),
+};
+
+export const buyerDashboardApi = {
+  get: () => client.get(`${apiBase}/api/buyer/dashboard`),
 };
 
 export default client;

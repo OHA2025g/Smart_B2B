@@ -140,6 +140,8 @@ async def clear_demo_data(db, preserved_user_ids):
 
     # Order matters: dependents first
     await db.adminactionlogs.delete_many({})
+    await db.workflow_events.delete_many({})
+    await db.notifications.delete_many({})
     await db.orders.delete_many({})
     await db.quotes.delete_many({})
     await db.rfqs.delete_many({})
@@ -458,6 +460,81 @@ async def create_supplier_scores(db, seller_ids):
         )
 
 
+async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_ids, buyer_ids):
+    """Add sample workflow_events and notifications for timeline/notifications UI."""
+    now = _now()
+    rfq_list = list(rfqs) if hasattr(rfqs, "__anext__") else rfqs
+    for rfq in rfq_list[:80]:
+        await db.workflow_events.insert_one({
+            "entity_type": "rfq",
+            "entity_id": rfq["_id"],
+            "actor_id": rfq["buyerId"],
+            "actor_role": "buyer",
+            "event_type": "RFQ_CREATED",
+            "event_label": "RFQ created",
+            "metadata": {},
+            "created_at": rfq.get("createdAt", now) - timedelta(hours=random.randint(0, 48)),
+        })
+    cursor = db.quotes.find({}).limit(120)
+    async for q in cursor:
+        await db.workflow_events.insert_one({
+            "entity_type": "rfq",
+            "entity_id": q["rfqId"],
+            "actor_id": q["sellerId"],
+            "actor_role": "seller",
+            "event_type": "QUOTE_SUBMITTED",
+            "event_label": "Quote submitted",
+            "metadata": {"quoteId": str(q["_id"])},
+            "created_at": q.get("createdAt", now),
+        })
+        rfq_doc = await db.rfqs.find_one({"_id": q["rfqId"]})
+        buyer_id = rfq_doc["buyerId"] if rfq_doc else (buyer_ids[0] if buyer_ids else None)
+        if buyer_id:
+            await db.notifications.insert_one({
+                "user_id": buyer_id,
+                "title": "New Quote",
+                "message": "A supplier submitted a quote for your RFQ.",
+                "type": "quote_submitted",
+                "related_entity_type": "rfq",
+                "related_entity_id": str(q["rfqId"]),
+                "is_read": random.random() < 0.5,
+                "created_at": q.get("createdAt", now),
+            })
+    cursor_o = db.orders.find({}).limit(50)
+    async for o in cursor_o:
+        await db.workflow_events.insert_one({
+            "entity_type": "order",
+            "entity_id": o["_id"],
+            "actor_id": o["buyerId"],
+            "actor_role": "buyer",
+            "event_type": "ORDER_CREATED",
+            "event_label": "Order created",
+            "metadata": {"rfqId": str(o.get("rfqId"))},
+            "created_at": o.get("createdAt", now),
+        })
+        await db.notifications.insert_one({
+            "user_id": o["sellerId"],
+            "title": "New Order",
+            "message": "You received a new order.",
+            "type": "order_created",
+            "related_entity_type": "order",
+            "related_entity_id": str(o["_id"]),
+            "is_read": random.random() < 0.4,
+            "created_at": o.get("createdAt", now),
+        })
+    for sid in random.sample(seller_ids, min(10, len(seller_ids))):
+        await db.notifications.insert_one({
+            "user_id": sid,
+            "title": "Supplier verified",
+            "message": "Your account has been verified as a supplier.",
+            "type": "supplier_verified",
+            "related_entity_type": "user",
+            "related_entity_id": str(sid),
+            "is_read": random.random() < 0.6,
+            "created_at": now - timedelta(days=random.randint(1, 30)),
+        })
+
+
 async def create_admin_logs(db, admin_id, seller_ids):
     """Admin logs for verification, user creation, score recalc."""
     now = _now()
@@ -528,6 +605,9 @@ async def run():
     print("11. Creating admin logs...")
     await create_admin_logs(db, admin_id, all_sellers)
 
+    print("12. Creating workflow events and notifications...")
+    await create_workflow_events_and_notifications(db, rfqs, admin_id, all_sellers, all_buyers)
+
     # Summary
     print("\n--- Summary ---")
     for name, coll in [
@@ -542,6 +622,8 @@ async def run():
         ("orders", db.orders),
         ("supplier_scores", db.supplier_scores),
         ("adminactionlogs", db.adminactionlogs),
+        ("workflow_events", db.workflow_events),
+        ("notifications", db.notifications),
     ]:
         c = await coll.count_documents({})
         print(f"  {name}: {c}")

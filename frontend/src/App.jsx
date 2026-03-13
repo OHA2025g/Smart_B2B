@@ -16,6 +16,8 @@ import RFQList from './pages/RFQList';
 import RFQDetail from './pages/RFQDetail';
 import AdminPanel from './pages/AdminPanel';
 import Home from './pages/Home';
+import SupplierProfile from './pages/SupplierProfile';
+import Notifications from './pages/Notifications';
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
         <Route path="register" element={<Register />} />
         <Route path="products" element={<Products />} />
         <Route path="product/:id" element={<ProductDetail />} />
+        <Route path="suppliers/:id" element={<SupplierProfile />} />
+        <Route path="notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="wishlist" element={<ProtectedRoute allowedRoles={['buyer']}><Wishlist /></ProtectedRoute>} />
         <Route path="cart" element={<ProtectedRoute allowedRoles={['buyer']}><Cart /></ProtectedRoute>} />
         <Route path="rfq" element={<ProtectedRoute allowedRoles={['buyer']}><RFQList /></ProtectedRoute>} />

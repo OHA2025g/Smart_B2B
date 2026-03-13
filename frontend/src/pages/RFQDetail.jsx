@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Send, CheckCircle } from 'lucide-react';
+import { Send, CheckCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { rfqApi, messagesApi } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -14,6 +14,8 @@ export default function RFQDetail() {
   const { user } = useAuth();
   const [rfq, setRfq] = useState(null);
   const [quotes, setQuotes] = useState([]);
+  const [comparison, setComparison] = useState([]);
+  const [timeline, setTimeline] = useState([]);
   const [thread, setThread] = useState(null);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,8 @@ export default function RFQDetail() {
   useEffect(() => {
     if (!rfq) return;
     rfqApi.getQuotes(id).then((res) => setQuotes(res.data.data.quotes || [])).catch(() => setQuotes([]));
+    rfqApi.getQuoteComparison(id).then((res) => setComparison(res.data.data.comparison || [])).catch(() => setComparison([]));
+    rfqApi.getTimeline(id).then((res) => setTimeline(res.data.data.timeline || [])).catch(() => setTimeline([]));
     messagesApi.get(id).then((res) => setThread(res.data.data.thread)).catch(() => setThread(null));
   }, [rfq, id]);
 
@@ -51,6 +55,8 @@ export default function RFQDetail() {
       await rfqApi.acceptQuote(id, quoteId);
       toast.add('Quote accepted. Order created.', 'success');
       rfqApi.getById(id).then((res) => setRfq(res.data.data.rfq));
+      rfqApi.getQuoteComparison(id).then((res) => setComparison(res.data.data.comparison || []));
+      rfqApi.getTimeline(id).then((res) => setTimeline(res.data.data.timeline || []));
       setQuotes((prev) => prev.map((q) => (q._id === quoteId ? { ...q, status: 'accepted' } : { ...q, status: 'rejected' })));
     } catch (e) {
       toast.add(e.response?.data?.message || 'Failed to accept quote', 'error');
@@ -98,6 +104,28 @@ export default function RFQDetail() {
         </div>
       </Card>
 
+      {/* Timeline / Activity */}
+      {timeline.length > 0 && (
+        <Card>
+          <div className="p-4">
+            <h2 className="font-medium mb-3 flex items-center gap-2">
+              <Clock className="h-4 w-4" /> Timeline
+            </h2>
+            <ul className="space-y-2">
+              {timeline.map((e) => (
+                <li key={e._id || e.id} className="flex gap-3 text-sm">
+                  <span className="text-neutral-500 shrink-0">
+                    {e.created_at ? new Date(e.created_at).toLocaleString() : ''}
+                  </span>
+                  <span className="font-medium">{e.event_label}</span>
+                  <span className="text-neutral-500">({e.actor_role})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="p-4">
           <h2 className="font-medium mb-2">Items</h2>
@@ -112,7 +140,7 @@ export default function RFQDetail() {
         </div>
       </Card>
 
-      {isBuyer && quotes.length > 0 && (
+      {isBuyer && (comparison.length > 0 || quotes.length > 0) && (
         <Card>
           <div className="p-4">
             <h2 className="font-medium mb-4">Quote comparison</h2>
@@ -120,9 +148,11 @@ export default function RFQDetail() {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b">
+                    <th className="text-left py-2">Rank</th>
                     <th className="text-left py-2">Seller</th>
                     <th className="text-left py-2">Quoted price</th>
                     <th className="text-left py-2">Delivery (days)</th>
+                    <th className="text-left py-2">Avail. qty</th>
                     <th className="text-left py-2">Trust score</th>
                     <th className="text-left py-2">Quote score</th>
                     <th className="text-left py-2">Status</th>
@@ -130,24 +160,44 @@ export default function RFQDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...quotes].sort((a, b) => (b.quoteScore ?? 0) - (a.quoteScore ?? 0)).map((q) => {
-                    const total = q.items?.reduce((s, i) => s + (i.unitPrice || 0) * (i.availableQty || 0), 0) || 0;
+                  {(comparison.length > 0 ? comparison : quotes.map((q) => ({
+                    quoteId: q._id,
+                    seller_name: q.sellerId?.name,
+                    verified_supplier: !!q.sellerId?.isVerifiedSupplier,
+                    trust_score: q.sellerId?.trustScore,
+                    quoted_price: q.items?.reduce((s, i) => s + (i.unitPrice || 0) * (i.availableQty || 0), 0) || 0,
+                    delivery_days: q.items?.[0]?.deliveryDays ?? '—',
+                    available_qty: q.items?.[0]?.availableQty ?? '—',
+                    quote_score: q.quoteScore,
+                    rank: 0,
+                    status: q.status,
+                  }))).map((row, idx) => {
+                    const quoteId = row.quoteId || (quotes[idx]?._id);
+                    const quoteStatus = quotes.find((q) => q._id === quoteId)?.status ?? row.status;
+                    const accepted = quoteStatus === 'accepted';
+                    const rejected = quoteStatus === 'rejected';
                     return (
-                      <tr key={q._id} className="border-b">
+                      <tr key={row.quoteId || idx} className="border-b">
+                        <td className="py-2 font-medium">#{row.rank || idx + 1}</td>
                         <td className="py-2">
-                          <span>{q.sellerId?.name}</span>
-                          {q.sellerId?.isVerifiedSupplier && <Badge variant="success" className="ml-1 text-xs">Verified</Badge>}
+                          <span>{row.seller_name}</span>
+                          {row.verified_supplier && <Badge variant="success" className="ml-1 text-xs">Verified</Badge>}
                         </td>
-                        <td className="py-2">₹{total}</td>
-                        <td className="py-2">{q.items?.[0]?.deliveryDays ?? '—'}</td>
-                        <td className="py-2">{q.sellerId?.trustScore != null ? `${q.sellerId.trustScore}%` : '—'}</td>
-                        <td className="py-2 font-medium">{q.quoteScore != null ? q.quoteScore : '—'}</td>
-                        <td className="py-2"><Badge variant={q.status === 'accepted' ? 'success' : q.status === 'rejected' ? 'danger' : 'default'}>{q.status}</Badge></td>
+                        <td className="py-2">₹{row.quoted_price ?? row.total_amount ?? 0}</td>
+                        <td className="py-2">{row.delivery_days ?? '—'}</td>
+                        <td className="py-2">{row.available_qty ?? '—'}</td>
+                        <td className="py-2">{row.trust_score != null ? `${row.trust_score}` : '—'}</td>
+                        <td className="py-2 font-medium">{row.quote_score ?? '—'}</td>
                         <td className="py-2">
-                          {q.status === 'accepted' ? (
+                          <Badge variant={accepted ? 'success' : rejected ? 'danger' : 'default'}>
+                            {accepted ? 'Accepted' : rejected ? 'Rejected' : 'Pending'}
+                          </Badge>
+                        </td>
+                        <td className="py-2">
+                          {accepted ? (
                             <Badge variant="success">Accepted</Badge>
-                          ) : q.status !== 'rejected' && rfq.status !== 'accepted' ? (
-                            <Button size="sm" onClick={() => handleAcceptQuote(q._id)} disabled={!!accepting}>
+                          ) : !rejected && rfq.status !== 'accepted' && quoteId ? (
+                            <Button size="sm" onClick={() => handleAcceptQuote(quoteId)} disabled={!!accepting}>
                               <CheckCircle className="h-4 w-4 mr-1" /> Accept quote
                             </Button>
                           ) : null}

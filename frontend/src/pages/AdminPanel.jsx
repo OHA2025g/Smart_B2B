@@ -23,6 +23,7 @@ export default function AdminPanel() {
   const [tab, setTab] = useState('dashboard');
   const [dashboard, setDashboard] = useState(null);
   const [users, setUsers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [rfqs, setRfqs] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -34,16 +35,18 @@ export default function AdminPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const [d, u, c, r, o, l] = await Promise.all([
+      const [d, u, sup, c, r, o, l] = await Promise.all([
         adminApi.dashboard().then((res) => res.data.data.dashboard).catch(() => null),
         adminApi.getUsers().then((res) => res.data.data.users),
-        categoriesApi.list().then((res) => res.data.data.categories),
+        adminApi.getSuppliers().then((res) => res.data.data.suppliers).catch(() => []),
+        adminApi.getCategories().then((res) => res.data.data.categories || []).catch(() => []),
         adminApi.getRfqs().then((res) => res.data.data.rfqs),
         adminApi.getOrders().then((res) => res.data.data.orders),
         adminApi.getLogs().then((res) => res.data.data.logs),
       ]);
       setDashboard(d || null);
       setUsers(u || []);
+      setSuppliers(sup || []);
       setCategories(c || []);
       setRfqs(r || []);
       setOrders(o || []);
@@ -82,9 +85,17 @@ export default function AdminPanel() {
 
   const handleVerify = async (userId, verified) => {
     try {
-      await adminApi.verifySupplier(userId, verified);
+      if (verified) {
+        await adminApi.verifySupplier(userId, true);
+      } else {
+        try {
+          await adminApi.unverifySupplier(userId);
+        } catch {
+          await adminApi.verifySupplier(userId, false);
+        }
+      }
       toast.add(verified ? 'Supplier verified' : 'Verification removed', 'success');
-      load(); // refresh so trust score updates
+      load();
     } catch {
       toast.add('Action failed', 'error');
     }
@@ -170,29 +181,34 @@ export default function AdminPanel() {
                 <tr className="border-b">
                   <th className="text-left p-3">Name</th>
                   <th className="text-left p-3">Email</th>
+                  <th className="text-left p-3">Company / City</th>
                   <th className="text-left p-3">Trust score</th>
                   <th className="text-left p-3">Verified</th>
                   <th className="text-left p-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {users.filter((u) => u.role === 'seller').map((u) => (
-                  <tr key={u._id} className="border-b">
-                    <td className="p-3">{u.name}</td>
-                    <td className="p-3">{u.email}</td>
-                    <td className="p-3">
-                      {u.trustScore != null ? `${Math.round(u.trustScore)}%` : '—'}
-                      {u.trustLevel && <span className="text-neutral-500 text-xs ml-1">({u.trustLevel})</span>}
-                    </td>
-                    <td className="p-3">{u.isVerifiedSupplier ? <Badge variant="success">Verified</Badge> : <Badge variant="default">Pending</Badge>}</td>
-                    <td className="p-3 flex gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => handleVerify(u._id, !u.isVerifiedSupplier)}>
-                        {u.isVerifiedSupplier ? 'Unverify' : 'Verify'}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleRecalculateScore(u._id)}>Recalculate score</Button>
-                    </td>
-                  </tr>
-                ))}
+                {(suppliers.length > 0 ? suppliers : users.filter((u) => u.role === 'seller')).map((u) => {
+                  const uid = u._id || u.id;
+                  return (
+                    <tr key={uid} className="border-b">
+                      <td className="p-3">{u.name}</td>
+                      <td className="p-3">{u.email}</td>
+                      <td className="p-3">{u.companyName || '—'} {u.city ? ` · ${u.city}` : ''}</td>
+                      <td className="p-3">
+                        {u.trustScore != null ? `${Math.round(u.trustScore)}` : '—'}
+                        {u.trustLevel && <span className="text-neutral-500 text-xs ml-1">({u.trustLevel})</span>}
+                      </td>
+                      <td className="p-3">{u.isVerifiedSupplier ? <Badge variant="success">Verified</Badge> : <Badge variant="default">Pending</Badge>}</td>
+                      <td className="p-3 flex gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => handleVerify(uid, !u.isVerifiedSupplier)}>
+                          {u.isVerifiedSupplier ? 'Unverify' : 'Verify'}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleRecalculateScore(uid)}>Recalculate score</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
