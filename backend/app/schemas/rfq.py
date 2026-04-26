@@ -1,4 +1,5 @@
 from typing import Optional, Literal
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -19,11 +20,16 @@ class RfqStatusUpdate(BaseModel):
 
 class QuoteItemSubmit(BaseModel):
     productId: str
-    unitPrice: float = Field(..., ge=0)
-    availableQty: int = Field(..., ge=0)
-    deliveryDays: Optional[int] = Field(None, ge=0)
+    unitPrice: float = Field(..., gt=0)
+    availableQty: int = Field(..., gt=0)
+    deliveryDays: int = Field(..., gt=0)
+    itemNote: Optional[str] = Field(None, max_length=2000)
 
 
 class QuoteSubmit(BaseModel):
-    items: Optional[list[QuoteItemSubmit]] = None
-    message: Optional[str] = None
+    """POST /api/rfq/{id}/quote — items must cover every RFQ line for this seller's products."""
+
+    items: list[QuoteItemSubmit] = Field(..., min_length=1)
+    message: Optional[str] = Field(None, max_length=5000)
+    termsAndConditions: Optional[str] = Field(None, max_length=10000)
+    quoteValidUntil: datetime

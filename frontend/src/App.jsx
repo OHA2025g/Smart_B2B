@@ -8,7 +8,6 @@ import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
 import SellerProducts from './pages/SellerProducts';
 import SellerRFQs from './pages/SellerRFQs';
-import SellerOrders from './pages/SellerOrders';
 import CompanyProfile from './pages/CompanyProfile';
 import Wishlist from './pages/Wishlist';
 import Cart from './pages/Cart';
@@ -18,6 +17,8 @@ import AdminPanel from './pages/AdminPanel';
 import Home from './pages/Home';
 import SupplierProfile from './pages/SupplierProfile';
 import Notifications from './pages/Notifications';
+import OrderDetail from './pages/OrderDetail';
+import Orders from './pages/Orders';
 
 function App() {
   return (
@@ -34,8 +35,17 @@ function App() {
         <Route path="cart" element={<ProtectedRoute allowedRoles={['buyer']}><Cart /></ProtectedRoute>} />
         <Route path="rfq" element={<ProtectedRoute allowedRoles={['buyer']}><RFQList /></ProtectedRoute>} />
         <Route path="rfq/:id" element={<ProtectedRoute><RFQDetail /></ProtectedRoute>} />
+        <Route
+          path="orders"
+          element={
+            <ProtectedRoute allowedRoles={['buyer', 'seller', 'admin']}>
+              <Orders />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
         <Route path="seller/rfqs" element={<ProtectedRoute allowedRoles={['seller']}><SellerRFQs /></ProtectedRoute>} />
-        <Route path="seller/orders" element={<ProtectedRoute allowedRoles={['seller']}><SellerOrders /></ProtectedRoute>} />
+        <Route path="seller/orders" element={<Navigate to="/orders" replace />} />
         <Route path="admin/panel" element={<ProtectedRoute allowedRoles={['admin']}><AdminPanel /></ProtectedRoute>} />
         <Route
           path="dashboard"

@@ -68,7 +68,10 @@ export default function CompanyProfile() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="max-w-xl">
       <h1 className="text-2xl font-bold text-neutral-900 mb-2">Company Profile</h1>
-      <p className="text-neutral-500 mb-6">Your business details shown to buyers.</p>
+      <p className="text-neutral-500 mb-2">Your business details shown to buyers.</p>
+      {profile && (
+        <p className="text-sm text-teal-700 mb-6">You have a saved company profile—update the form below to change it.</p>
+      )}
       {error && (
         <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg">{error}</div>
       )}

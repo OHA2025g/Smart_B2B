@@ -30,6 +30,9 @@ async def buyer_dashboard(request: Request, user: dict = Depends(get_current_use
         doc = serialize_doc(o)
         if doc:
             recent_orders.append(doc)
+    rfq_status_distribution = {}
+    async for d in db.rfqs.aggregate([{"$match": {"buyerId": uid}}, {"$group": {"_id": "$status", "count": {"$sum": 1}}}]):
+        rfq_status_distribution[d["_id"] or "unknown"] = d["count"]
     return success_response(data={
         "dashboard": {
             "wishlistCount": wishlist_count,
@@ -40,5 +43,6 @@ async def buyer_dashboard(request: Request, user: dict = Depends(get_current_use
             "ordersPlaced": orders_placed,
             "recentRfqs": recent_rfqs,
             "recentOrders": recent_orders,
+            "rfqStatusDistribution": rfq_status_distribution,
         }
     })

@@ -1,5 +1,9 @@
 import axios from 'axios';
 
+/** localStorage keys — keep in sync with AuthContext */
+export const AUTH_TOKEN_KEY = 'token';
+export const AUTH_USER_KEY = 'smartb2b_user';
+
 // When empty, Vite proxy forwards /api to backend (localhost:5000)
 const baseURL = import.meta.env.VITE_API_URL || '';
 
@@ -10,7 +14,7 @@ const client = axios.create({
 
 // Attach JWT from localStorage to every request
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -22,9 +26,11 @@ client.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }
@@ -32,6 +38,10 @@ client.interceptors.response.use(
 
 // Path prefix: when baseURL empty, Vite proxy sends /api to backend; paths must be /api/...
 const apiBase = baseURL ? baseURL : '';
+
+export const publicApi = {
+  marketStats: () => client.get(`${apiBase}/api/public/stats`),
+};
 
 export const authApi = {
   register: (data) => client.post(`${apiBase}/api/auth/register`, data),
@@ -98,7 +108,7 @@ export const quoteApi = {
 };
 
 export const ordersApi = {
-  getMy: () => client.get(`${apiBase}/api/orders/me`),
+  getMy: (params) => client.get(`${apiBase}/api/orders/me`, { params }),
   getById: (id) => client.get(`${apiBase}/api/orders/${id}`),
   getTimeline: (orderId) => client.get(`${apiBase}/api/orders/${orderId}/timeline`),
   updateStatus: (id, status) => client.put(`${apiBase}/api/orders/${id}/status`, { status }),
@@ -123,10 +133,13 @@ export const adminApi = {
   getCategories: () => client.get(`${apiBase}/api/admin/categories`),
   getRfqs: (params) => client.get(`${apiBase}/api/admin/rfqs`, { params }),
   getOrders: () => client.get(`${apiBase}/api/admin/orders`),
-  getLogs: () => client.get(`${apiBase}/api/admin/logs`),
+  getLogs: (params) => client.get(`${apiBase}/api/admin/logs`, { params }),
   getAnalyticsOverview: () => client.get(`${apiBase}/api/admin/analytics/overview`),
   getAnalyticsTopSuppliers: () => client.get(`${apiBase}/api/admin/analytics/top-suppliers`),
   getAnalyticsCategoryPerformance: () => client.get(`${apiBase}/api/admin/analytics/category-performance`),
+  getAnalyticsTopProducts: () => client.get(`${apiBase}/api/admin/analytics/top-products`),
+  getAnalyticsRfqTrends: () => client.get(`${apiBase}/api/admin/analytics/rfq-trends`),
+  getAnalyticsOrderTrends: () => client.get(`${apiBase}/api/admin/analytics/order-trends`),
 };
 
 export const suppliersApi = {

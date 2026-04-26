@@ -8,19 +8,39 @@ from app.schemas.admin import BanBody, VerifySupplierBody
 from app.services.supplier_score import recalculate_supplier_score, get_supplier_score_for_response
 from app.services.workflow_events import emit_event
 from app.services.notifications import create_notification
+from app.services.admin_audit import admin_action_log
+from app.routers.orders import _company_display_name
 
 router = APIRouter(dependencies=[Depends(require_roles("admin"))])
 
 
 async def admin_log(admin_id, action_type, target_id, details):
-    db = get_db()
-    try:
-        await db.adminactionlogs.insert_one({
-            "adminId": admin_id, "actionType": action_type, "targetId": target_id, "details": details,
-            "createdAt": datetime.datetime.utcnow()
-        })
-    except Exception as e:
-        print("AdminActionLog error:", e)
+    await admin_action_log(admin_id, action_type, target_id, details)
+
+
+def _target_type_from_action(action_type: str) -> str:
+    if not action_type:
+        return "unknown"
+    if "USER" in action_type or "BAN" in action_type:
+        return "user"
+    if "SUPPLIER" in action_type or "VERIFY" in action_type or "SCORE" in action_type:
+        return "supplier"
+    if "CATEGORY" in action_type:
+        return "category"
+    return "misc"
+
+
+async def _enrich_admin_log(db, log: dict) -> dict:
+    admin_user = await db.users.find_one({"_id": log["adminId"]}, projection={"name": 1, "email": 1, "role": 1}) if log.get("adminId") else None
+    doc = serialize_doc(log) or {}
+    doc["actor"] = (admin_user or {}).get("name") or (admin_user or {}).get("email") or "Admin"
+    doc["actorRole"] = (admin_user or {}).get("role") or "admin"
+    doc["action"] = log.get("actionType")
+    doc["targetType"] = _target_type_from_action(log.get("actionType") or "")
+    # Do not re-assign targetId/details from raw BSON — breaks JSON (ObjectId) and caused admin 500s.
+    if admin_user:
+        doc["adminId"] = serialize_doc(admin_user)
+    return doc
 
 
 @router.get("/summary")
@@ -62,6 +82,9 @@ async def dashboard(request: Request, user: dict = Depends(get_current_user)):
         u = await db.users.find_one({"_id": ObjectId(sid)}, projection={"name": 1, "email": 1, "isVerifiedSupplier": 1}) if sid else None
         score = await get_supplier_score_for_response(ObjectId(sid)) if sid else None
         top_suppliers.append({"sellerId": sid, "name": (u or {}).get("name"), "email": (u or {}).get("email"), "verified": bool((u or {}).get("isVerifiedSupplier")), "orderCount": count, "trustScore": (score or {}).get("total_score", 0)})
+    recent_logs = []
+    async for log in db.adminactionlogs.find({}).sort("createdAt", -1).limit(20):
+        recent_logs.append(await _enrich_admin_log(db, log))
     return success_response(data={
         "dashboard": {
             "totalUsers": users_c,
@@ -77,6 +100,7 @@ async def dashboard(request: Request, user: dict = Depends(get_current_user)):
             "orderStatusDistribution": order_status_dist,
             "topCategories": top_categories,
             "topSuppliers": top_suppliers,
+            "recentLogs": recent_logs,
         }
     })
 
@@ -274,6 +298,8 @@ async def get_orders(request: Request, user: dict = Depends(get_current_user)):
             doc["items"] = items
             doc["buyerId"] = serialize_doc(buyer) if buyer else None
             doc["sellerId"] = serialize_doc(seller) if seller else None
+            doc["buyerCompany"] = await _company_display_name(db, o.get("buyerId"))
+            doc["sellerCompany"] = await _company_display_name(db, o.get("sellerId"))
         orders.append(doc)
     return success_response(data={"orders": orders})
 
@@ -287,17 +313,24 @@ async def admin_list_categories(request: Request, user: dict = Depends(get_curre
 
 
 @router.get("/logs")
-async def get_logs(request: Request, user: dict = Depends(get_current_user)):
+async def get_logs(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    action: str | None = None,
+    role: str | None = None,
+):
     db = get_db()
-    cursor = db.adminactionlogs.find({}).sort("createdAt", -1).limit(100)
+    q = {}
+    cursor = db.adminactionlogs.find(q).sort("createdAt", -1).limit(200)
     logs = []
     async for log in cursor:
-        admin_user = await db.users.find_one({"_id": log["adminId"]}, projection={"name": 1, "email": 1}) if log.get("adminId") else None
-        doc = serialize_doc(log)
-        if doc:
-            doc["adminId"] = serialize_doc(admin_user) if admin_user else None
-        logs.append(doc)
-    return success_response(data={"logs": logs})
+        if action and action.lower() not in (log.get("actionType") or "").lower():
+            continue
+        enriched = await _enrich_admin_log(db, log)
+        if role and (enriched.get("actorRole") or "").lower() != role.lower():
+            continue
+        logs.append(enriched)
+    return success_response(data={"logs": logs[:150]})
 
 
 @router.get("/analytics/overview")
@@ -332,3 +365,52 @@ async def analytics_category_performance(request: Request, user: dict = Depends(
     pipeline = [{"$group": {"_id": "$category", "productCount": {"$sum": 1}}}, {"$sort": {"productCount": -1}}, {"$limit": 20}]
     cats = [{"name": d["_id"], "productCount": d["productCount"]} async for d in db.products.aggregate(pipeline) if d.get("_id")]
     return success_response(data={"categoryPerformance": cats})
+
+
+@router.get("/analytics/top-products")
+async def analytics_top_products(request: Request, user: dict = Depends(get_current_user)):
+    """Most-requested products via RFQ line items (demo metric)."""
+    db = get_db()
+    pipeline = [
+        {"$unwind": "$items"},
+        {"$group": {"_id": "$items.productId", "rfqCount": {"$sum": 1}}},
+        {"$sort": {"rfqCount": -1}},
+        {"$limit": 20},
+    ]
+    out = []
+    async for row in db.rfqs.aggregate(pipeline):
+        pid = row.get("_id")
+        if not pid:
+            continue
+        prod = await db.products.find_one({"_id": pid}, projection={"title": 1, "category": 1, "seller": 1})
+        out.append({
+            "productId": str(pid),
+            "title": (prod or {}).get("title"),
+            "category": (prod or {}).get("category"),
+            "rfqLineCount": row.get("rfqCount", 0),
+        })
+    return success_response(data={"topProducts": out})
+
+
+@router.get("/analytics/rfq-trends")
+async def analytics_rfq_trends(request: Request, user: dict = Depends(get_current_user)):
+    db = get_db()
+    pipeline = [
+        {"$project": {"month": {"$dateToString": {"format": "%Y-%m", "date": "$createdAt"}}}},
+        {"$group": {"_id": "$month", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    series = [{"month": d["_id"], "count": d["count"]} async for d in db.rfqs.aggregate(pipeline) if d.get("_id")]
+    return success_response(data={"rfqTrends": series})
+
+
+@router.get("/analytics/order-trends")
+async def analytics_order_trends(request: Request, user: dict = Depends(get_current_user)):
+    db = get_db()
+    pipeline = [
+        {"$project": {"month": {"$dateToString": {"format": "%Y-%m", "date": "$createdAt"}}}},
+        {"$group": {"_id": "$month", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    series = [{"month": d["_id"], "count": d["count"]} async for d in db.orders.aggregate(pipeline) if d.get("_id")]
+    return success_response(data={"orderTrends": series})

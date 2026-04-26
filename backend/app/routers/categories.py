@@ -6,6 +6,7 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_roles
 from app.schemas.common import success_response, error_response, serialize_doc
 from app.schemas.category import CategoryCreate, CategoryUpdate
+from app.services.admin_audit import admin_action_log
 
 router = APIRouter()
 
@@ -30,6 +31,7 @@ async def create(request: Request, body: CategoryCreate, user: dict = Depends(re
         payload["slug"] = _slug(payload["name"])
     r = await db.categories.insert_one(payload)
     cat = await db.categories.find_one({"_id": r.inserted_id})
+    await admin_action_log(ObjectId(user["id"]), "CATEGORY_CREATE", str(r.inserted_id), {"name": payload.get("name")})
     return success_response(data={"category": serialize_doc(cat)})
 
 
@@ -45,6 +47,7 @@ async def update(id: str, request: Request, body: CategoryUpdate, user: dict = D
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail=error_response("Category not found.", "NOT_FOUND", path=request.url.path))
     cat = await db.categories.find_one({"_id": oid})
+    await admin_action_log(ObjectId(user["id"]), "CATEGORY_UPDATE", id, payload)
     return success_response(data={"category": serialize_doc(cat)})
 
 
@@ -58,4 +61,5 @@ async def remove(id: str, request: Request, user: dict = Depends(require_roles("
     result = await db.categories.delete_one({"_id": oid})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail=error_response("Category not found.", "NOT_FOUND", path=request.url.path))
+    await admin_action_log(ObjectId(user["id"]), "CATEGORY_DELETE", id, {})
     return success_response(data=None, message="Category deleted.")

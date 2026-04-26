@@ -30,21 +30,40 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 PRESERVED_EMAILS = {"admin@smartb2b.com", "seller@example.com", "buyer@example.com"}
 
+# Target scale: hundreds of core entities + rich RFQ/order pipeline (12 categories, 3 preserved users).
+# Tuned for a realistic B2B demo: busy listings, RFQ pipeline, orders, admin activity.
 COUNTS = {
     "categories": 12,
-    "sellers": 25,
-    "buyers": 90,
-    "products": 600,
-    "wishlist_items": 300,
-    "cart_items": 180,
-    "rfqs": 120,
-    "quotes": 260,
-    "orders": 70,
+    "sellers": 260,
+    "buyers": 340,
+    "products": 820,
+    "wishlist_items": 620,
+    "cart_items": 480,
+    "rfqs": 680,
+    "quotes": 1280,
+    "orders": 520,
 }
 
 RFQ_STATUSES = ["sent", "quoted", "accepted", "closed"]
-RFQ_STATUS_WEIGHTS = [0.20, 0.22, 0.50, 0.08]  # ~50% accepted RFQs to source 70 orders from quotes
-ORDER_STATUSES = ["created", "confirmed", "processing", "shipped", "delivered"]
+RFQ_STATUS_WEIGHTS = [0.12, 0.18, 0.62, 0.08]  # bias accepted RFQs for orders / realistic pipeline
+# Full lifecycle (matches app / order updates) so fulfillment charts show a rich mix, not 1–2 random slices.
+ORDER_STATUSES = ["created", "confirmed", "processing", "shipped", "delivered", "cancelled"]
+# Skewed toward mid/late fulfillment (not equal sixths — strict round-robin made every slice ~16.7%).
+ORDER_STATUS_SEED_WEIGHTS = [0.06, 0.09, 0.16, 0.26, 0.34, 0.09]
+ORDER_STATUS_JITTER_UNIFORM = 0.14  # occasional flat pick so counts never stay perfectly periodic
+
+
+def reset_order_status_sequence():
+    """No-op placeholder (kept so run() does not need churn); status picks are stateless."""
+    return
+
+
+def next_demo_order_status_for_seller(_seller_id) -> str:
+    """Weighted lifecycle mix + light jitter so pie charts look like real ops data, not placeholders."""
+    if random.random() < ORDER_STATUS_JITTER_UNIFORM:
+        return random.choice(ORDER_STATUSES)
+    return random.choices(ORDER_STATUSES, weights=ORDER_STATUS_SEED_WEIGHTS, k=1)[0]
+
 
 TRUST_LEVELS = [(85, 100, "Highly Trusted"), (70, 85, "Trusted"), (50, 70, "Moderate"), (0, 50, "Low Trust")]
 
@@ -182,7 +201,7 @@ async def create_categories(db):
 
 
 async def create_users(db, admin_id, seller_id, buyer_id):
-    """Create 25 sellers and 90 buyers with realistic Indian names/emails."""
+    """Create demo sellers and buyers (counts from COUNTS) with realistic Indian names/emails."""
     preserved = {admin_id, seller_id, buyer_id}
     now = _now()
     sellers, buyers = [], []
@@ -257,10 +276,14 @@ async def create_company_profiles(db, seller_ids):
 
 
 async def create_products(db, seller_ids, category_names):
-    """600 products across sellers and categories."""
+    """Many products across sellers and categories (batched insert_many)."""
     now = _now()
     products = []
     units = ["unit", "kg", "meter", "piece", "tonne", "litre", "box", "set"]
+    batch_docs = []
+    batch_meta = []
+    batch_size = 200
+
     for _ in range(COUNTS["products"]):
         cat = random.choice(category_names)
         seller = random.choice(seller_ids)
@@ -280,36 +303,65 @@ async def create_products(db, seller_ids, category_names):
             "isActive": True,
             "createdAt": now,
         }
-        r = await db.products.insert_one(doc)
-        products.append({"_id": r.inserted_id, "seller": seller, "category": cat, "price": price, "minOrderQuantity": min_qty})
+        batch_docs.append(doc)
+        batch_meta.append({"seller": seller, "category": cat, "price": price, "minOrderQuantity": min_qty})
+        if len(batch_docs) >= batch_size:
+            res = await db.products.insert_many(batch_docs)
+            for meta, oid in zip(batch_meta, res.inserted_ids):
+                products.append({"_id": oid, **meta})
+            batch_docs, batch_meta = [], []
+
+    if batch_docs:
+        res = await db.products.insert_many(batch_docs)
+        for meta, oid in zip(batch_meta, res.inserted_ids):
+            products.append({"_id": oid, **meta})
     return products
 
 
 async def create_wishlist_and_cart(db, buyer_ids, product_ids):
-    """300 wishlist items, 180 cart items; no duplicate (buyer, product) for wishlist/cart."""
+    """Wishlist / cart rows; unique (buyer, product) per collection; batched inserts."""
     now = _now()
     wishlist_pairs = set()
     cart_pairs = set()
-    for _ in range(COUNTS["wishlist_items"]):
+    wl_batch = []
+    max_attempts = COUNTS["wishlist_items"] * 8
+    attempts = 0
+    while len(wishlist_pairs) < COUNTS["wishlist_items"] and attempts < max_attempts:
+        attempts += 1
         b = random.choice(buyer_ids)
         p = random.choice(product_ids)
         if (b, p) in wishlist_pairs:
             continue
         wishlist_pairs.add((b, p))
-        await db.wishlistitems.insert_one({"buyerId": b, "productId": p, "createdAt": now})
-    for _ in range(COUNTS["cart_items"]):
+        wl_batch.append({"buyerId": b, "productId": p, "createdAt": now})
+        if len(wl_batch) >= 400:
+            await db.wishlistitems.insert_many(wl_batch)
+            wl_batch = []
+    if wl_batch:
+        await db.wishlistitems.insert_many(wl_batch)
+
+    cart_batch = []
+    max_c = COUNTS["cart_items"] * 8
+    c_attempts = 0
+    while len(cart_pairs) < COUNTS["cart_items"] and c_attempts < max_c:
+        c_attempts += 1
         b = random.choice(buyer_ids)
         p = random.choice(product_ids)
         if (b, p) in cart_pairs:
             continue
         cart_pairs.add((b, p))
-        await db.cartitems.insert_one({
+        cart_batch.append({
             "buyerId": b,
             "productId": p,
             "quantity": max(1, random.randint(1, 500)),
             "notes": "Sample note" if random.random() > 0.7 else "",
             "createdAt": now,
         })
+        if len(cart_batch) >= 400:
+            await db.cartitems.insert_many(cart_batch)
+            cart_batch = []
+    if cart_batch:
+        await db.cartitems.insert_many(cart_batch)
 
 
 def _build_products_by_seller(products):
@@ -323,9 +375,12 @@ def _build_products_by_seller(products):
 
 
 async def create_rfqs(db, buyer_ids, products, products_by_seller):
-    """120 RFQs: each buyer creates RFQs with 1-4 products; status sent/quoted/accepted/closed."""
+    """RFQs with 1-4 products; status sent/quoted/accepted/closed (batched insert_many)."""
     now = _now()
     rfqs = []
+    docs = []
+    metas = []
+    batch_size = 150
     for i in range(COUNTS["rfqs"]):
         buyer_id = random.choice(buyer_ids)
         n_items = random.randint(1, min(4, len(products)))
@@ -335,35 +390,66 @@ async def create_rfqs(db, buyer_ids, products, products_by_seller):
             for p in chosen
         ]
         status = random.choices(RFQ_STATUSES, weights=RFQ_STATUS_WEIGHTS)[0]
+        created_at = now - timedelta(days=random.randint(0, 60))
         doc = {
             "buyerId": buyer_id,
             "items": items,
             "status": status,
-            "createdAt": now - timedelta(days=random.randint(0, 60)),
+            "createdAt": created_at,
+            "validUntil": created_at + timedelta(days=7),
             "updated_at": now,
         }
-        r = await db.rfqs.insert_one(doc)
-        rfqs.append({
-            "_id": r.inserted_id,
+        docs.append(doc)
+        metas.append({
             "buyerId": buyer_id,
             "items": items,
             "status": status,
             "product_ids": [p["_id"] for p in chosen],
             "sellers_in_rfq": list({p["seller"] for p in chosen}),
         })
+        if len(docs) >= batch_size:
+            res = await db.rfqs.insert_many(docs)
+            for oid, m in zip(res.inserted_ids, metas):
+                rfqs.append({"_id": oid, **m})
+            docs, metas = [], []
+
+    if docs:
+        res = await db.rfqs.insert_many(docs)
+        for oid, m in zip(res.inserted_ids, metas):
+            rfqs.append({"_id": oid, **m})
     return rfqs
 
 
-async def create_quotes_and_orders_final(db, rfqs, products_by_seller, all_products_map):
-    """Create 260 quotes; for accepted ones create up to 70 orders. One quote per (rfq, seller) that has products in RFQ."""
+async def create_quotes_and_orders_final(
+    db,
+    rfqs,
+    all_products_map,
+    *,
+    quote_cap: int | None = None,
+    order_cap: int | None = None,
+    run_order_backfill: bool = True,
+    quote_accept_if_rfq_accepted: float | None = None,
+    quote_accept_if_rfq_quoted: float | None = None,
+    order_if_quote_accepted: float | None = None,
+):
+    """Quotes: one per (rfq, seller) with line items; orders from accepted quotes; optional global backfill."""
+    qc = COUNTS["quotes"] if quote_cap is None else quote_cap
+    oc = COUNTS["orders"] if order_cap is None else order_cap
+    p_q_when_accepted = 0.68 if quote_accept_if_rfq_accepted is None else quote_accept_if_rfq_accepted
+    p_q_when_quoted = quote_accept_if_rfq_quoted
+    p_order = 0.82 if order_if_quote_accepted is None else order_if_quote_accepted
     now = _now()
     used = set()
     quotes_created = 0
-    orders_to_create = []  # list of (quote_id, order_doc)
+    orders_to_create = []
+    quotes_done = False
 
     for rfq in rfqs:
+        if quotes_done:
+            break
         for seller_id in rfq["sellers_in_rfq"]:
-            if quotes_created >= COUNTS["quotes"]:
+            if quotes_created >= qc:
+                quotes_done = True
                 break
             key = (str(rfq["_id"]), str(seller_id))
             if key in used:
@@ -381,20 +467,29 @@ async def create_quotes_and_orders_final(db, rfqs, products_by_seller, all_produ
             if not quote_items:
                 continue
             status = "submitted"
-            if rfq["status"] == "accepted" and len(orders_to_create) < COUNTS["orders"] and random.random() < 0.55:
+            if rfq["status"] == "accepted" and len(orders_to_create) < oc and random.random() < p_q_when_accepted:
+                status = "accepted"
+            elif (
+                p_q_when_quoted is not None
+                and rfq["status"] == "quoted"
+                and len(orders_to_create) < oc
+                and random.random() < p_q_when_quoted
+            ):
                 status = "accepted"
             elif random.random() < 0.12:
                 status = "rejected"
+            q_created = now - timedelta(days=random.randint(0, 40))
             r = await db.quotes.insert_one({
                 "rfqId": rfq["_id"],
                 "sellerId": seller_id,
                 "items": quote_items,
                 "message": "Competitive quote." if random.random() > 0.6 else "",
                 "status": status,
-                "createdAt": now - timedelta(days=random.randint(0, 40)),
+                "createdAt": q_created,
+                "quoteValidUntil": q_created + timedelta(days=5),
             })
             quotes_created += 1
-            if status == "accepted" and len(orders_to_create) < COUNTS["orders"] and random.random() < 0.65:
+            if status == "accepted" and len(orders_to_create) < oc and random.random() < p_order:
                 total = sum(it["unitPrice"] * it["availableQty"] for it in quote_items)
                 order_items = [{"productId": it["productId"], "quantity": it["availableQty"], "agreedUnitPrice": it["unitPrice"]} for it in quote_items]
                 orders_to_create.append({
@@ -405,7 +500,9 @@ async def create_quotes_and_orders_final(db, rfqs, products_by_seller, all_produ
                     "items": order_items,
                     "totalAmount": round(total, 2),
                 })
-    for o in orders_to_create[: COUNTS["orders"]]:
+
+    to_insert = orders_to_create[:oc]
+    for o in to_insert:
         await db.orders.insert_one({
             "rfqId": o["rfqId"],
             "quoteId": o["quoteId"],
@@ -413,10 +510,49 @@ async def create_quotes_and_orders_final(db, rfqs, products_by_seller, all_produ
             "sellerId": o["sellerId"],
             "items": o["items"],
             "totalAmount": o["totalAmount"],
-            "status": random.choice(ORDER_STATUSES),
+            "status": next_demo_order_status_for_seller(o["sellerId"]),
             "createdAt": now - timedelta(days=random.randint(0, 25)),
         })
-    return quotes_created, min(len(orders_to_create), COUNTS["orders"])
+
+    if run_order_backfill:
+        order_count = await db.orders.count_documents({})
+        if order_count < COUNTS["orders"]:
+            need = COUNTS["orders"] - order_count
+            used_quote_ids = {o["quoteId"] for o in to_insert}
+            async for qd in db.quotes.find({"status": "accepted"}):
+                if need <= 0:
+                    break
+                qid = qd["_id"]
+                if qid in used_quote_ids:
+                    continue
+                if await db.orders.find_one({"quoteId": qid}):
+                    continue
+                rfq_doc = await db.rfqs.find_one({"_id": qd["rfqId"]})
+                if not rfq_doc:
+                    continue
+                quote_items = qd.get("items") or []
+                if not quote_items:
+                    continue
+                total = sum(it["unitPrice"] * it["availableQty"] for it in quote_items)
+                order_items = [{"productId": it["productId"], "quantity": it["availableQty"], "agreedUnitPrice": it["unitPrice"]} for it in quote_items]
+                await db.orders.insert_one({
+                    "rfqId": qd["rfqId"],
+                    "quoteId": qid,
+                    "buyerId": rfq_doc["buyerId"],
+                    "sellerId": qd["sellerId"],
+                    "items": order_items,
+                    "totalAmount": round(total, 2),
+                    "status": next_demo_order_status_for_seller(qd["sellerId"]),
+                    "createdAt": now - timedelta(days=random.randint(0, 25)),
+                })
+                used_quote_ids.add(qid)
+                need -= 1
+
+    inserted_orders = len(to_insert)
+    final_orders = await db.orders.count_documents({})
+    if run_order_backfill:
+        return quotes_created, min(final_orders, COUNTS["orders"])
+    return quotes_created, inserted_orders
 
 
 async def create_supplier_scores(db, seller_ids):
@@ -464,7 +600,8 @@ async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_id
     """Add sample workflow_events and notifications for timeline/notifications UI."""
     now = _now()
     rfq_list = list(rfqs) if hasattr(rfqs, "__anext__") else rfqs
-    for rfq in rfq_list[:80]:
+    n_rfq_events = min(len(rfq_list), max(280, min(COUNTS["rfqs"], 520)))
+    for rfq in rfq_list[:n_rfq_events]:
         await db.workflow_events.insert_one({
             "entity_type": "rfq",
             "entity_id": rfq["_id"],
@@ -475,7 +612,8 @@ async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_id
             "metadata": {},
             "created_at": rfq.get("createdAt", now) - timedelta(hours=random.randint(0, 48)),
         })
-    cursor = db.quotes.find({}).limit(120)
+    quote_evt_limit = min(650, max(160, COUNTS["quotes"] // 2))
+    cursor = db.quotes.find({}).limit(quote_evt_limit)
     async for q in cursor:
         await db.workflow_events.insert_one({
             "entity_type": "rfq",
@@ -500,7 +638,8 @@ async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_id
                 "is_read": random.random() < 0.5,
                 "created_at": q.get("createdAt", now),
             })
-    cursor_o = db.orders.find({}).limit(50)
+    order_evt_limit = min(480, max(100, COUNTS["orders"]))
+    cursor_o = db.orders.find({}).limit(order_evt_limit)
     async for o in cursor_o:
         await db.workflow_events.insert_one({
             "entity_type": "order",
@@ -522,7 +661,8 @@ async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_id
             "is_read": random.random() < 0.4,
             "created_at": o.get("createdAt", now),
         })
-    for sid in random.sample(seller_ids, min(10, len(seller_ids))):
+    n_verified_notes = min(45, len(seller_ids))
+    for sid in (random.sample(seller_ids, n_verified_notes) if seller_ids else []):
         await db.notifications.insert_one({
             "user_id": sid,
             "title": "Supplier verified",
@@ -538,7 +678,8 @@ async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_id
 async def create_admin_logs(db, admin_id, seller_ids):
     """Admin logs for verification, user creation, score recalc."""
     now = _now()
-    for sid in random.sample(seller_ids, min(15, len(seller_ids))):
+    n_verify = min(max(90, len(seller_ids) // 3), len(seller_ids))
+    for sid in (random.sample(seller_ids, n_verify) if seller_ids else []):
         await db.adminactionlogs.insert_one({
             "adminId": admin_id,
             "actionType": "VERIFY_SUPPLIER",
@@ -546,7 +687,8 @@ async def create_admin_logs(db, admin_id, seller_ids):
             "details": {"verified": True},
             "createdAt": now - timedelta(days=random.randint(1, 90)),
         })
-    for _ in range(5):
+    n_recalc = min(160, max(40, len(seller_ids) // 2))
+    for _ in range(n_recalc):
         await db.adminactionlogs.insert_one({
             "adminId": admin_id,
             "actionType": "RECALCULATE_SCORE",
@@ -563,6 +705,189 @@ async def create_admin_logs(db, admin_id, seller_ids):
     })
 
 
+# Preserved seller@ / buyer@ — two-digit volumes (~30–80) with strong seller-side pipeline (solo-supplier RFQs).
+HERO_EXTRA_PRODUCTS = 55
+HERO_INQUIRIES = 48
+HERO_BUYER_WISHLIST = 42
+HERO_BUYER_CART = 36
+# RFQs where every line item is from the demo seller → quotes & orders stay on that seller.
+HERO_SOLO_RFQS = 72
+HERO_QUOTE_CAP = 78
+HERO_ORDER_CAP = 54
+
+
+async def boost_preserved_demo_accounts(db, seller_id, buyer_id, admin_id, category_names, all_buyers):
+    now = _now()
+    units = ["unit", "kg", "meter", "piece", "tonne", "litre", "box", "set"]
+    batch_docs = []
+    batch_size = 120
+    for i in range(HERO_EXTRA_PRODUCTS):
+        cat = random.choice(category_names)
+        product_list = CATEGORY_PRODUCTS.get(cat, ["Product"])
+        title = (_product_title(cat, product_list) + f" — Hero SKU {i + 1}")[:120]
+        price = round(random.uniform(120, 20000), 2)
+        min_qty = random.choice([1, 10, 50, 100, 250, 500])
+        batch_docs.append({
+            "seller": seller_id,
+            "title": title,
+            "description": f"B2B {title} — stocked for demo.",
+            "category": cat,
+            "price": price,
+            "unit": random.choice(units),
+            "minOrderQuantity": min_qty,
+            "city": random.choice(INDIAN_CITIES),
+            "isActive": True,
+            "createdAt": now,
+        })
+        if len(batch_docs) >= batch_size:
+            await db.products.insert_many(batch_docs)
+            batch_docs = []
+    if batch_docs:
+        await db.products.insert_many(batch_docs)
+
+    plist = await db.products.find(
+        {},
+        {"_id": 1, "seller": 1, "price": 1, "minOrderQuantity": 1, "title": 1, "category": 1},
+    ).to_list(15000)
+    pmap = {p["_id"]: p for p in plist}
+    mine = [p for p in plist if p.get("seller") == seller_id]
+    mine_ids = [p["_id"] for p in mine]
+    if not mine_ids:
+        print("  (hero boost skipped: no products for demo seller)")
+        return
+
+    all_pids = [p["_id"] for p in plist]
+
+    for _ in range(HERO_INQUIRIES):
+        buyer = buyer_id if random.random() < 0.75 else random.choice(all_buyers)
+        pid = random.choice(mine_ids)
+        await db.inquiries.insert_one({
+            "buyer": buyer,
+            "product": pid,
+            "seller": seller_id,
+            "message": random.choice([
+                "Requesting bulk quote and lead time.",
+                "MOQ and annual pricing?",
+                "Sample shipment possible?",
+            ]),
+            "quantity": random.randint(12, 96),
+            "status": random.choices(["pending", "pending", "responded", "closed"], weights=[0.45, 0.25, 0.2, 0.1])[0],
+            "createdAt": now - timedelta(days=random.randint(0, 120)),
+        })
+
+    wl_pairs = set()
+    attempts = 0
+    while len(wl_pairs) < HERO_BUYER_WISHLIST and attempts < HERO_BUYER_WISHLIST * 20:
+        attempts += 1
+        p = random.choice(all_pids)
+        if (buyer_id, p) in wl_pairs:
+            continue
+        wl_pairs.add((buyer_id, p))
+        await db.wishlistitems.insert_one({"buyerId": buyer_id, "productId": p, "createdAt": now})
+
+    cart_pairs = set()
+    attempts = 0
+    while len(cart_pairs) < HERO_BUYER_CART and attempts < HERO_BUYER_CART * 20:
+        attempts += 1
+        p = random.choice(all_pids)
+        if (buyer_id, p) in cart_pairs:
+            continue
+        cart_pairs.add((buyer_id, p))
+        await db.cartitems.insert_one({
+            "buyerId": buyer_id,
+            "productId": p,
+            "quantity": max(1, random.randint(12, 80)),
+            "notes": "",
+            "createdAt": now,
+        })
+
+    # Mix of accepted (orders) + sent/quoted (active pipeline) for both buyer & seller dashboards.
+    hero_solo_weights = [0.14, 0.22, 0.52, 0.12]
+    hero_rfqs = []
+    for _ in range(HERO_SOLO_RFQS):
+        cap = min(4, len(mine))
+        n_items = random.randint(2, cap) if cap >= 2 else 1
+        n_pick = min(n_items, len(mine))
+        chosen = random.sample(mine, n_pick) if len(mine) >= n_pick else list(mine)
+        if len(chosen) < 1:
+            continue
+        items = [
+            {"productId": p["_id"], "quantity": p.get("minOrderQuantity", 10) + random.randint(0, 40), "notes": ""}
+            for p in chosen
+        ]
+        status = random.choices(RFQ_STATUSES, weights=hero_solo_weights)[0]
+        created_at = now - timedelta(days=random.randint(0, 75))
+        doc = {
+            "buyerId": buyer_id,
+            "items": items,
+            "status": status,
+            "createdAt": created_at,
+            "validUntil": created_at + timedelta(days=7),
+            "updated_at": now,
+        }
+        r = await db.rfqs.insert_one(doc)
+        hero_rfqs.append({
+            "_id": r.inserted_id,
+            "buyerId": buyer_id,
+            "items": items,
+            "status": status,
+            "sellers_in_rfq": list({p["seller"] for p in chosen}),
+        })
+
+    await create_quotes_and_orders_final(
+        db,
+        hero_rfqs,
+        pmap,
+        quote_cap=HERO_QUOTE_CAP,
+        order_cap=HERO_ORDER_CAP,
+        run_order_backfill=False,
+        quote_accept_if_rfq_accepted=0.9,
+        quote_accept_if_rfq_quoted=0.48,
+        order_if_quote_accepted=0.93,
+    )
+
+    # Deterministic top-up: random order sampling often undershoots — pair remaining accepted quotes with orders.
+    hero_rfq_ids = [r["_id"] for r in hero_rfqs]
+    have = await db.orders.count_documents({"sellerId": seller_id})
+    need_orders = max(0, HERO_ORDER_CAP - have)
+    if need_orders > 0 and hero_rfq_ids:
+        async for qd in db.quotes.find(
+            {"sellerId": seller_id, "status": "accepted", "rfqId": {"$in": hero_rfq_ids}},
+            sort=[("createdAt", 1)],
+        ):
+            if need_orders <= 0:
+                break
+            if await db.orders.find_one({"quoteId": qd["_id"]}):
+                continue
+            rfq_doc = await db.rfqs.find_one({"_id": qd["rfqId"]})
+            if not rfq_doc:
+                continue
+            q_items = qd.get("items") or []
+            if not q_items:
+                continue
+            total = sum(it["unitPrice"] * it["availableQty"] for it in q_items)
+            o_items = [{"productId": it["productId"], "quantity": it["availableQty"], "agreedUnitPrice": it["unitPrice"]} for it in q_items]
+            await db.orders.insert_one({
+                "rfqId": qd["rfqId"],
+                "quoteId": qd["_id"],
+                "buyerId": rfq_doc["buyerId"],
+                "sellerId": seller_id,
+                "items": o_items,
+                "totalAmount": round(total, 2),
+                "status": next_demo_order_status_for_seller(seller_id),
+                "createdAt": now - timedelta(days=random.randint(0, 22)),
+            })
+            need_orders -= 1
+
+    await db.adminactionlogs.insert_one({
+        "adminId": admin_id,
+        "actionType": "USER_CREATED",
+        "targetId": str(seller_id),
+        "details": {"message": "Hero demo accounts boost applied"},
+        "createdAt": now,
+    })
+
+
 async def run():
     client = AsyncIOMotorClient(MONGODB_URI)
     db = client[_db_name()]
@@ -574,6 +899,7 @@ async def run():
 
     print("2. Clearing demo data...")
     await clear_demo_data(db, preserved)
+    reset_order_status_sequence()
 
     print("3. Creating categories...")
     category_names = await create_categories(db)
@@ -597,7 +923,7 @@ async def run():
     rfqs = await create_rfqs(db, all_buyers, products, products_by_seller)
 
     print("9. Creating quotes and orders...")
-    n_quotes, n_orders = await create_quotes_and_orders_final(db, rfqs, products_by_seller, all_products_map)
+    n_quotes, n_orders = await create_quotes_and_orders_final(db, rfqs, all_products_map)
 
     print("10. Creating supplier scores...")
     await create_supplier_scores(db, all_sellers)
@@ -607,6 +933,10 @@ async def run():
 
     print("12. Creating workflow events and notifications...")
     await create_workflow_events_and_notifications(db, rfqs, admin_id, all_sellers, all_buyers)
+
+    print("13. Boosting preserved demo seller/buyer (seller@ / buyer@) activity...")
+    await boost_preserved_demo_accounts(db, seller_id, buyer_id, admin_id, category_names, all_buyers)
+    await create_supplier_scores(db, [seller_id])
 
     # Summary
     print("\n--- Summary ---")

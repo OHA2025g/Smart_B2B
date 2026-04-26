@@ -60,6 +60,24 @@ async def root(request: Request):
     return HTMLResponse(html)
 
 
+@router.get("/api/public/stats")
+async def public_market_stats():
+    """Anonymous-friendly counts for marketing / landing page."""
+    db = get_db()
+    products_c = await db.products.count_documents({"isActive": True})
+    sellers_c = await db.users.count_documents({"role": "seller"})
+    rfqs_c = await db.rfqs.count_documents({})
+    orders_c = await db.orders.count_documents({})
+    return success_response(data={
+        "stats": {
+            "totalProducts": products_c,
+            "suppliers": sellers_c,
+            "totalRfqs": rfqs_c,
+            "totalOrders": orders_c,
+        }
+    })
+
+
 @router.get("/health")
 async def health(request: Request):
     import datetime

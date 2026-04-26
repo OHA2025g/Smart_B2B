@@ -5,12 +5,12 @@ export function StatCard({ title, value, icon: Icon, trend, className = '' }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-white rounded-xl border border-neutral-200 p-5 shadow-sm ${className}`}
+      className={`bg-white rounded-2xl border border-slate-200/90 p-5 shadow-md shadow-slate-200/40 ${className}`}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-medium text-neutral-500">{title}</p>
-          <p className="mt-1 text-2xl font-semibold text-neutral-900">{value}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">{value}</p>
           {trend != null && (
             <p className={`mt-1 text-xs ${trend >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {trend >= 0 ? '+' : ''}{trend}% from last period
@@ -18,7 +18,7 @@ export function StatCard({ title, value, icon: Icon, trend, className = '' }) {
           )}
         </div>
         {Icon && (
-          <div className="rounded-lg bg-primary-100 p-2 text-primary-600">
+          <div className="rounded-xl bg-teal-50 p-2.5 text-teal-600 ring-1 ring-teal-100 shrink-0">
             <Icon className="h-5 w-5" />
           </div>
         )}

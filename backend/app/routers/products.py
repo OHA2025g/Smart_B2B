@@ -25,15 +25,33 @@ async def _enrich_seller_with_score(seller_doc: dict, seller_oid) -> dict:
 
 
 @router.get("")
-async def list_products(search: str | None = Query(None), category: str | None = Query(None), city: str | None = Query(None)):
+async def list_products(
+    search: str | None = Query(None),
+    category: str | None = Query(None),
+    city: str | None = Query(None),
+    verified_only: bool | None = Query(None, description="Only products from verified suppliers"),
+    trust_level: str | None = Query(None, description="Filter by supplier trust level label"),
+    min_price: float | None = Query(None),
+    max_price: float | None = Query(None),
+):
     db = get_db()
-    filter_q = {"isActive": True}
+    filter_q: dict = {"isActive": True}
     if category:
         filter_q["category"] = re.compile(re.escape(category), re.I)
     if city:
         filter_q["city"] = re.compile(re.escape(city), re.I)
     if search:
         filter_q["$or"] = [{"title": re.compile(re.escape(search), re.I)}, {"description": re.compile(re.escape(search), re.I)}, {"category": re.compile(re.escape(search), re.I)}]
+    price_rng = {}
+    if min_price is not None:
+        price_rng["$gte"] = min_price
+    if max_price is not None:
+        price_rng["$lte"] = max_price
+    if price_rng:
+        filter_q["price"] = price_rng
+    if verified_only:
+        verified_ids = await db.users.find({"role": "seller", "isVerifiedSupplier": True}, {"_id": 1}).to_list(None)
+        filter_q["seller"] = {"$in": [x["_id"] for x in verified_ids]}
     cursor = db.products.find(filter_q).sort("createdAt", -1)
     products = []
     async for p in cursor:
@@ -41,6 +59,10 @@ async def list_products(search: str | None = Query(None), category: str | None =
         doc = serialize_doc(p)
         if doc:
             doc["seller"] = await _enrich_seller_with_score(seller, p["seller"]) if seller else None
+            if trust_level and doc.get("seller"):
+                tl = (doc["seller"].get("trustLevel") or "").lower()
+                if trust_level.lower() not in tl.lower():
+                    continue
         products.append(doc)
     return success_response(data={"products": products})
 

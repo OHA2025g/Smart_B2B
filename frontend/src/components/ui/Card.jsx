@@ -16,7 +16,7 @@ export function Card({ children, className = '', hover = false, ...props }) {
 }
 
 export function CardHeader({ children, className = '' }) {
-  return <div className={`px-5 py-4 border-b border-neutral-100 ${className}`}>{children}</div>;
+  return <div className={`px-5 py-4 border-b border-slate-100 bg-slate-50/40 ${className}`}>{children}</div>;
 }
 
 export function CardBody({ children, className = '' }) {
@@ -24,5 +24,5 @@ export function CardBody({ children, className = '' }) {
 }
 
 export function CardFooter({ children, className = '' }) {
-  return <div className={`px-5 py-4 bg-neutral-50 border-t border-neutral-100 ${className}`}>{children}</div>;
+  return <div className={`px-5 py-4 bg-slate-50/80 border-t border-slate-100 ${className}`}>{children}</div>;
 }

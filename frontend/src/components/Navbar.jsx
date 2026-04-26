@@ -64,7 +64,7 @@ export function Navbar() {
     <motion.header
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`sticky top-0 z-40 border-b transition-colors duration-300 ${navBg}`}
+      className={`sticky top-0 z-40 border-b transition-colors duration-300 print:hidden ${navBg}`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
@@ -83,17 +83,23 @@ export function Navbar() {
                     <NavLink to="/wishlist">Wishlist</NavLink>
                     <NavLink to="/cart">Cart</NavLink>
                     <NavLink to="/rfq">RFQs</NavLink>
+                    <NavLink to="/orders">Orders</NavLink>
                   </>
                 )}
                 {user.role === 'seller' && (
                   <>
                     <NavLink to="/seller/products">My Products</NavLink>
                     <NavLink to="/seller/rfqs">RFQs</NavLink>
-                    <NavLink to="/seller/orders">Orders</NavLink>
+                    <NavLink to="/orders">Orders</NavLink>
                     <NavLink to="/profile/company">Company</NavLink>
                   </>
                 )}
-                {user.role === 'admin' && <NavLink to="/admin/panel">Admin Panel</NavLink>}
+                {user.role === 'admin' && (
+                  <>
+                    <NavLink to="/orders">Orders</NavLink>
+                    <NavLink to="/admin/panel">Admin Panel</NavLink>
+                  </>
+                )}
                 <NavLink to="/dashboard">Dashboard</NavLink>
                 <div className="relative">
                   <Link

@@ -39,9 +39,37 @@ body::before {
   .text-gradient {
     @apply bg-clip-text text-transparent;
   }
+  .page-heading {
+    @apply text-2xl sm:text-3xl font-bold tracking-tight text-slate-900;
+  }
+  .section-heading {
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+  .section-title {
+    @apply text-lg sm:text-xl font-bold text-slate-900 tracking-tight;
+  }
+  .chart-surface {
+    @apply rounded-xl bg-slate-50/80 border border-slate-100 p-2 sm:p-3;
+  }
 }
 
 /* Focus visible for accessibility */
 *:focus-visible {
   @apply outline-2 outline-offset-2 outline-teal-500;
+}
+
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  body::before {
+    display: none !important;
+  }
+  .print-hidden {
+    display: none !important;
+  }
+  .print-invoice-root {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+  }
 }

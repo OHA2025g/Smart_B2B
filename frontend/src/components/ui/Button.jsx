@@ -6,6 +6,10 @@ const variants = {
   secondary: 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400',
   ghost: 'text-slate-700 hover:bg-slate-100',
   danger: 'bg-red-600 text-white hover:bg-red-700',
+  outlineDanger:
+    'bg-white border-2 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 shadow-sm',
+  successSolid:
+    'bg-emerald-600 text-white hover:bg-emerald-700 border-0 shadow-sm',
 };
 
 const sizes = {

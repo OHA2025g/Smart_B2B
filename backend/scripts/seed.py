@@ -1,5 +1,9 @@
 """
-Seed script: admin, sellers, buyers, categories, products, sample RFQ/Quote/Order.
+Seed script.
+
+Default: full marketplace demo (scripts.generate_demo_data — large dataset, clears non-preserved data).
+Minimal legacy seed: set SEED_MINIMAL=1
+
 Run: python -m scripts.seed (ensure MONGODB_URI is set and DB is running)
 """
 import asyncio
@@ -26,9 +30,15 @@ def slug(s):
 
 
 async def seed():
+    if os.getenv("SEED_MINIMAL", "").lower() not in ("1", "true", "yes"):
+        from scripts.generate_demo_data import run as run_bulk_demo
+
+        await run_bulk_demo()
+        return
+
     client = AsyncIOMotorClient(MONGODB_URI)
     db = client[_db_name()]
-    print("Connected to MongoDB")
+    print("Connected to MongoDB (SEED_MINIMAL mode)")
 
     admin_email = "admin@smartb2b.com"
     admin_password = "Admin@123"
@@ -166,10 +176,25 @@ async def seed():
         rfq_exists = await db.rfqs.find_one({"buyerId": buyer1["_id"]})
         if not rfq_exists:
             p1 = all_products[0]
-            rfq_doc = {"buyerId": buyer1["_id"], "items": [{"productId": p1["_id"], "quantity": p1.get("minOrderQuantity") or 10, "notes": "Urgent requirement"}], "status": "quoted"}
+            now_seed = datetime.datetime.utcnow()
+            rfq_doc = {
+                "buyerId": buyer1["_id"],
+                "items": [{"productId": p1["_id"], "quantity": p1.get("minOrderQuantity") or 10, "notes": "Urgent requirement"}],
+                "status": "quoted",
+                "createdAt": now_seed,
+                "validUntil": now_seed + datetime.timedelta(days=7),
+            }
             r_rfq = await db.rfqs.insert_one(rfq_doc)
             rfq = await db.rfqs.find_one({"_id": r_rfq.inserted_id})
-            quote_doc = {"rfqId": rfq["_id"], "sellerId": p1["seller"], "items": [{"productId": p1["_id"], "unitPrice": p1["price"], "availableQty": p1.get("minOrderQuantity") or 10, "deliveryDays": 7}], "message": "We can supply at listed price.", "status": "accepted"}
+            quote_doc = {
+                "rfqId": rfq["_id"],
+                "sellerId": p1["seller"],
+                "items": [{"productId": p1["_id"], "unitPrice": p1["price"], "availableQty": p1.get("minOrderQuantity") or 10, "deliveryDays": 7}],
+                "message": "We can supply at listed price.",
+                "status": "accepted",
+                "createdAt": now_seed,
+                "quoteValidUntil": now_seed + datetime.timedelta(days=5),
+            }
             r_quote = await db.quotes.insert_one(quote_doc)
             quote = await db.quotes.find_one({"_id": r_quote.inserted_id})
             total = sum(it["unitPrice"] * it["availableQty"] for it in quote["items"])
@@ -177,6 +202,7 @@ async def seed():
                 "rfqId": rfq["_id"], "quoteId": quote["_id"], "buyerId": buyer1["_id"], "sellerId": p1["seller"],
                 "items": [{"productId": p1["_id"], "quantity": quote["items"][0]["availableQty"], "agreedUnitPrice": p1["price"]}],
                 "totalAmount": total, "status": "confirmed",
+                "createdAt": now_seed,
             })
             await db.rfqs.update_one({"_id": rfq["_id"]}, {"$set": {"status": "accepted"}})
             await db.messagethreads.insert_one({

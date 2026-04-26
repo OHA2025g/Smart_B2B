@@ -4,78 +4,7 @@
 
 SmartB2B is a full-stack B2B marketplace where **buyers** discover products, build wishlists and RFQ carts, raise RFQs, compare seller quotes (with trust and quote scores), and place orders; **sellers** list products, respond with quotes, and manage order fulfillment; **admins** verify suppliers, moderate users, manage categories, and monitor RFQs, orders, and analytics.
 
-This README is the main project overview: **everything the product does today**, **tech stack**, **workflows**, **data model**, **API surface**, **how to run**, and **credentials**. Deeper change logs and file-level notes live in [`update.md`](update.md); specs and deliverables in [`DELIVERABLES.md`](DELIVERABLES.md) and [`PHASE2.md`](PHASE2.md).
-
----
-
-## What SmartB2B can do today (full feature catalog)
-
-Below is a practical list of **what is implemented end-to-end** (UI + API unless noted). Use it as the single place to see scope of the live website and backend.
-
-### Public & marketing
-
-- **Landing page (`/`)** — Animated hero (Framer Motion), value props (verified suppliers, RFQ flow, B2B network), step-by-step “how it works,” **live stats** from the API (category count, product count), **featured products** and **category** exploration, testimonials-style blocks, and CTAs to register or browse products.
-- **Product catalog (`/products`)** — Paginated-style listing with **search**, **category** filter (including quick category chips), and **city** filter; skeleton loading and empty states; each card links to product detail. **Buyers** can **toggle wishlist** (heart) and **add to RFQ cart** from the grid without leaving the page (toasts on actions).
-- **Product detail (`/product/:id`)** — Full product info: title, **₹** price and unit, description, **minimum order quantity**, **city**, seller name, **category** with visual treatment; **supplier trust panel** (trust score %, trust level, verified vs unverified badge). **Logged-in buyers** can send a **product inquiry** (quantity stepper + required message). Guests are prompted to log in as a buyer to inquire.
-- **Supplier profile (`/suppliers/:id`)** — Public page: company name, **verified supplier** badge when applicable, location, **trust score / trust level**, activity-style metrics from the profile API, and a **product grid** for that supplier (products loaded from the public list and filtered in the client by seller id).
-
-### Authentication & access control
-
-- **Register (`/register`)** — Email, password, name, **role: buyer or seller**; on success, JWT stored and redirect to dashboard.
-- **Login (`/login`)** — JWT session; **`GET /api/auth/me`** restores session on refresh.
-- **Protected routes** — Pages are gated by login and, where needed, **role** (buyer-only: wishlist, cart, buyer RFQ list; seller-only: products, seller RFQs/orders, company profile; admin-only: admin panel).
-- **API client** — Attaches `Authorization: Bearer` automatically; on **401**, clears storage and sends the user to login.
-
-### Buyer experience
-
-- **Wishlist (`/wishlist`)** — View and manage saved products (backed by wishlist API).
-- **RFQ cart (`/cart`)** — Line items with quantities/notes, **update**, **remove**, **clear cart**, and **create RFQ from cart** (navigates to the new RFQ detail). Empty-state guidance when the cart has no items.
-- **My RFQs (`/rfq`)** — List of the buyer’s RFQs with status badges; each row links to **RFQ detail**.
-- **RFQ detail (`/rfq/:id`)** — Available to participants (buyer, assigned sellers, admin as applicable):
-  - **Status stepper** (created → quoted → accepted / order).
-  - **Workflow timeline** (dated events with actor role) when the backend returns timeline data.
-  - **Line items** (products and quantities).
-  - **Quote comparison** (buyer): ranked table when comparison API returns data — rank, seller, **verified** badge, quoted price, delivery days, available qty, **trust score**, **quote score**, status, and **Accept quote** (creates an **order** and updates RFQ/quote state).
-  - **RFQ message thread** — Load history and **send messages** tied to the RFQ (buyers, sellers, and others with access use the same thread UI).
-- **Dashboard (`/dashboard`)** — Buyer view: **stats** (RFQs, cart items, wishlist items) from **`/api/buyer/dashboard`** with fallback to counting from list endpoints; **recent inquiries** list with product context and links.
-- **Notifications (`/notifications`)** — Full list with **mark one read** and **mark all read**; deep links to RFQ, dashboard (orders), or supplier profile when the payload includes related entities.
-
-### Seller experience
-
-- **Company profile (`/profile/company`)** — Create/update seller **company** record (`/api/company`).
-- **My products (`/seller/products`)** — **List** own products; **grid/list** toggle; **create**, **edit**, **delete**; form covers title, description, category, price, unit, MOQ, city; loading skeletons and empty state.
-- **RFQs for you (`/seller/rfqs`)** — RFQs that include the seller’s products; **submit quote** via modal (uses default pricing from products; copy notes that quotes can be revised later — **quote revision** is available on the **API** via `PUT /api/quote/:id`; there is no separate “revise quote” screen in the SPA yet). Links into shared **RFQ detail** for messaging and context.
-- **My orders (`/seller/orders`)** — Orders after a buyer accepts a quote; **status progression**: created → **Confirm** → confirmed → **Processing** / **Mark shipped** → shipped → **Mark delivered**; badges reflect state including cancelled/delivered styling where applicable.
-- **Dashboard (`/dashboard`)** — Seller view: **active RFQs** and **orders received** from **`/api/seller/dashboard`** with fallback counts; **inquiries** relevant to the seller surfaced like the buyer dashboard pattern.
-
-### Admin experience
-
-- **Admin panel (`/admin/panel`)** — Tabbed UI:
-  - **Dashboard** — Overview metrics and charts/data from admin dashboard endpoint (plus analytics calls where wired).
-  - **Users** — List users; **ban** / **unban**.
-  - **Supplier verification** — Verify or remove verification; **recalculate trust score** for a supplier.
-  - **Categories** — List and **create** / **update** / **delete** categories (admin APIs + category endpoints).
-  - **RFQs** — Browse RFQs across the platform.
-  - **Orders** — Browse orders.
-  - **Activity logs** — Admin action log stream.
-- **Dashboard (`/dashboard`)** — Admin view: **summary** counts and **dashboard** payload for high-level monitoring.
-
-### Cross-cutting UI & UX
-
-- **Navbar** — Role-aware links (buyer: Wishlist, Cart, RFQs; seller: My Products, RFQs, Orders, Company; admin: Admin Panel); **Dashboard** for all logged-in roles; **notification bell** with **unread count**, hover dropdown of latest items, link to **view all**; **logout**; on the home page, **transparent header** that solidifies on scroll.
-- **Design system** — Shared **Button**, **Card**, **Badge**, **Input**, **Select**, **Table**, **StatCard**, **EmptyState**, **SkeletonCard**, **Toast** provider; **Tailwind** theme with **teal** primary and **coral** CTAs, **Plus Jakarta Sans**, **Lucide** icons, **Framer Motion** on key pages.
-- **Layout** — **`AppShell`** wraps routes with navbar and consistent page container.
-
-### Backend & platform (what powers the site)
-
-- **REST API** under `/api/...` as summarized in [API overview](#api-overview-prefixes); **OpenAPI** at **`/docs`** (Swagger UI).
-- **Operational endpoints** — `GET /`, **`/health`**, **`/api`** route index.
-- **Security & quality** — **JWT** auth, **CORS**, **rate limiting** (SlowAPI when enabled), centralized validation error shaping.
-- **Trust engine** — Supplier **trust scores** and **levels**; admin verify/unverify and **recalculate**; **quote comparison scoring** blends price, delivery, and trust.
-- **Automation** — **Workflow events** for audit-style RFQ/order timelines; **in-app notifications** on relevant business events.
-- **Data** — MongoDB collections as in [MongoDB collections](#mongodb-collections-main); **seed** and **large demo dataset** scripts for realistic trials.
-
-**Intentionally not in current scope:** ML-based recommendations (called out as deferred in product planning).
+This README is the main project overview: **tech stack**, **workflows**, **data model**, **API surface**, **how to run**, and **credentials**. Deeper change logs and file-level notes live in [`update.md`](update.md); specs and deliverables in [`DELIVERABLES.md`](DELIVERABLES.md) and [`PHASE2.md`](PHASE2.md).
 
 ---
 
@@ -92,16 +21,39 @@ Below is a practical list of **what is implemented end-to-end** (UI + API unless
 
 ---
 
-## How we got here (milestones, brief)
+## What’s built (milestones)
 
-| Stage | Highlights |
-|--------|------------|
-| **Phase 1 (MVP)** | Auth (buyer/seller), company profile, products CRUD + public catalog, inquiries, basic admin summary, first dashboards and protected SPA routes. |
-| **Phase 1.6** | Root/health/api/docs discovery, CORS + rate limiting + validation errors, shared UI kit and motion on core flows. |
-| **Marketplace + trust + RFQ → order** | Wishlist, RFQ cart, full RFQ/quote/order lifecycle, supplier trust scores + admin verification, rich admin module, analytics APIs, demo data generator (keeps fixed test accounts). |
-| **Recent platform polish** | Workflow timelines, in-app notifications (API + bell + page), quote-comparison endpoint, public supplier profiles, dedicated **buyer/seller dashboard** APIs feeding the Dashboard page. |
+### Phase 1 (MVP)
 
-For dated or file-level notes, see [`update.md`](update.md).
+- Auth: register (buyer / seller), login, JWT, `GET /api/auth/me`
+- Company profile (seller): create/update, `GET /api/company/me`
+- Products: CRUD, public list with search / category / city, detail, seller’s list
+- Inquiries: create, list for buyer
+- Admin: summary counts
+- Frontend: login, register, role-based dashboard, products, product detail, seller products, company profile, protected routes
+
+### Phase 1.6
+
+- API: `GET /`, `/health`, `/api`, `/docs` (OpenAPI / Swagger)
+- Middleware: CORS, rate limiting, centralized validation errors
+- Frontend: shared design system, motion, upgraded products / product detail / dashboards / auth flows
+
+### Mid-term upgrade (marketplace + trust + RFQ → order)
+
+- **Wishlist** and **RFQ cart** (buyer); create RFQ from cart
+- **RFQ lifecycle:** create → sellers submit quotes → buyer compares (trust + quote scores, verified badges) → accept quote → **order** created
+- **Orders:** buyer/seller views; statuses **created → confirmed → processing → shipped → delivered**
+- **Supplier trust:** scores and levels; `GET /api/suppliers/:id/score`; admin verify / unverify / recalculate
+- **Admin:** users (ban/unban), suppliers, categories, RFQs, orders, activity logs, enriched dashboard and **analytics** endpoints
+- **Demo data:** `scripts/generate_demo_data.py` (large synthetic dataset; preserves three fixed test accounts)
+
+### Recent additions (workflow, notifications, dashboards)
+
+- **Workflow events** (`workflow_events` collection): audit-style timeline for RFQs and orders (`GET .../timeline`)
+- **In-app notifications** (`notifications` collection): `GET /api/notifications/me`, mark read / mark all read; navbar bell + `/notifications` page
+- **Quote comparison API:** ranked quotes for an RFQ (`GET /api/rfq/{id}/quote-comparison`)
+- **Supplier public profile:** `GET /api/suppliers/{seller_id}/profile` + frontend **`/suppliers/:id`**
+- **Seller / buyer dashboards:** `GET /api/seller/dashboard`, `GET /api/buyer/dashboard` with metrics and summaries for the main **Dashboard** page
 
 ---
 
@@ -223,15 +175,14 @@ SmartB2B/
 | `/login`, `/register` | Public |
 | `/products`, `/product/:id` | Public |
 | `/suppliers/:id` | Public supplier profile |
-| `/notifications` | Any logged-in role |
-| `/wishlist`, `/cart`, `/rfq` | Buyer only (protected) |
-| `/rfq/:id` | Logged-in; **shared** by buyer (owner), **assigned sellers**, and **admin** — quotes, comparison, messages, timeline |
-| `/seller/products`, `/seller/rfqs`, `/seller/orders`, `/profile/company` | Seller only (protected) |
-| `/dashboard` | Logged-in; **content switches** by buyer / seller / admin |
-| `/admin/panel` | Admin only (protected) |
-| `*` (unknown paths) | Redirect to `/` |
+| `/notifications` | Logged-in |
+| `/wishlist`, `/cart`, `/rfq` | Buyer |
+| `/rfq/:id` | Logged-in (buyer/seller/admin as per RFQ) |
+| `/seller/products`, `/seller/rfqs`, `/seller/orders`, `/profile/company` | Seller |
+| `/dashboard` | Logged-in (role-specific content) |
+| `/admin/panel` | Admin |
 
-**UI theme:** teal primary + coral CTAs, **Plus Jakarta Sans**, dark heroes and cards on key pages; see `frontend/tailwind.config.js`, `frontend/src/index.css`, and [`update.md`](update.md) for design tokens.
+**UI theme:** teal primary + coral CTAs, **Plus Jakarta Sans**, dark heroes and cards on key pages; see `tailwind.config.js`, `index.css`, and [`update.md`](update.md) for design tokens.
 
 ---
 
@@ -354,8 +305,6 @@ Use **`/docs`** for full request/response schemas and newer endpoints (notificat
 ---
 
 ## Checklist (current state)
-
-The authoritative narrative list of capabilities is **[What SmartB2B can do today](#what-smartb2b-can-do-today-full-feature-catalog)** above; this checklist is a compact completion matrix.
 
 ### Backend
 

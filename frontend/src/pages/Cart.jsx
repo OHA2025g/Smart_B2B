@@ -6,7 +6,6 @@ import { cartApi, rfqApi } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 
 export default function Cart() {

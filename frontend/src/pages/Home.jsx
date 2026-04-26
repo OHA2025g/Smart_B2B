@@ -1,9 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShoppingBag, ArrowRight, Shield, Zap, Users, Package, CheckCircle, Sparkles, Quote, FileText } from 'lucide-react';
+import {
+  ArrowRight,
+  Shield,
+  Zap,
+  Users,
+  Package,
+  CheckCircle,
+  Sparkles,
+  Quote,
+  FileText,
+  ChevronRight,
+  ShieldCheck,
+  FolderKanban,
+  MapPin,
+} from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { categoriesApi, productsApi } from '../api/client';
+import { categoriesApi, productsApi, publicApi } from '../api/client';
 
 const container = {
   hidden: { opacity: 0 },
@@ -25,41 +39,67 @@ const features = [
 ];
 
 const howItWorks = [
-  { step: 1, title: 'Browse', desc: 'Explore products and add to wishlist or RFQ cart' },
-  { step: 2, title: 'Add to RFQ cart', desc: 'Build your request for quote from cart or product pages' },
-  { step: 3, title: 'Receive quotes', desc: 'Suppliers submit quotes; compare price, delivery & trust' },
-  { step: 4, title: 'Compare & order', desc: 'Accept the best quote and place your order' },
+  { step: 1, title: 'Browse Products', desc: 'Search by category, city, and trust signals—save favorites to your wishlist.' },
+  { step: 2, title: 'Add to RFQ Cart', desc: 'Curate line items and quantities; one RFQ bundles everything for suppliers.' },
+  { step: 3, title: 'Receive Quotes', desc: 'Verified sellers respond with price, delivery, and availability in one thread.' },
+  { step: 4, title: 'Compare & Order', desc: 'Ranked quotes surface the best fit; accept to generate an order in-platform.' },
 ];
 
 export default function Home() {
   const [categories, setCategories] = useState([]);
   const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [verifiedSuppliers, setVerifiedSuppliers] = useState([]);
   const [stats, setStats] = useState([
-    { label: 'Categories', value: '—', sub: 'Industries' },
-    { label: 'Suppliers', value: '—', sub: 'Trusted' },
     { label: 'Products', value: '—', sub: 'Listings' },
+    { label: 'Suppliers', value: '—', sub: 'On platform' },
+    { label: 'RFQs', value: '—', sub: 'Raised' },
+    { label: 'Orders', value: '—', sub: 'Completed' },
   ]);
 
   useEffect(() => {
+    publicApi.marketStats().then((r) => {
+      const st = r.data.data?.stats;
+      if (!st) return;
+      setStats([
+        { label: 'Products', value: String(st.totalProducts ?? '—'), sub: 'Listings' },
+        { label: 'Suppliers', value: String(st.suppliers ?? '—'), sub: 'On platform' },
+        { label: 'RFQs', value: String(st.totalRfqs ?? '—'), sub: 'Raised' },
+        { label: 'Orders', value: String(st.totalOrders ?? '—'), sub: 'Completed' },
+      ]);
+    }).catch(() => {});
     categoriesApi.list().then((r) => {
       const cats = r.data.data?.categories || [];
       setCategories(cats);
-      setStats((s) => [{ ...s[0], value: String(cats.length) }, s[1], s[2]]);
     }).catch(() => {});
     productsApi.list().then((r) => {
       const list = r.data.data?.products || [];
       setFeaturedProducts(list.slice(0, 8));
-      const total = list.length;
-      setStats((s) => [s[0], s[1], { ...s[2], value: String(total) }]);
     }).catch(() => {});
+    productsApi
+      .list({ verified_only: true })
+      .then((r) => {
+        const list = r.data.data?.products || [];
+        const seen = new Set();
+        const sellers = [];
+        for (const p of list) {
+          const sid = (p.seller?._id || p.seller?.id)?.toString();
+          if (!sid || seen.has(sid)) continue;
+          seen.add(sid);
+          sellers.push({ ...p.seller, _id: sid, sampleCity: p.city });
+          if (sellers.length >= 6) break;
+        }
+        setVerifiedSuppliers(sellers);
+      })
+      .catch(() => setVerifiedSuppliers([]));
   }, []);
 
   return (
     <div className="min-h-screen">
       {/* Dark hero - contained so layout stays on screen */}
-      <section className="relative min-h-[85vh] flex flex-col justify-center overflow-hidden bg-slate-900 rounded-3xl">
+      <section className="relative min-h-[88vh] flex flex-col justify-center overflow-hidden bg-slate-900 rounded-3xl ring-1 ring-white/10 shadow-2xl shadow-slate-900/20">
         <div className="absolute inset-0 bg-mesh-dark bg-mesh bg-[length:200%_200%] animate-gradient-shift" />
-        <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-[0.06]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-slate-900/30 pointer-events-none" />
+        <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-[0.07]" />
         {/* Floating blobs */}
         <motion.div
           className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full bg-teal-500/20 blur-3xl"
@@ -82,16 +122,16 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-slate-300 text-sm font-medium mb-8 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.07] border border-white/15 text-slate-200 text-sm font-medium mb-8 backdrop-blur-md shadow-inner-glow"
           >
             <Sparkles className="h-4 w-4 text-teal-400" />
-            Trusted B2B marketplace
+            Procurement-focused B2B marketplace
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 max-w-4xl mx-auto leading-[1.1]"
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 max-w-4xl mx-auto leading-[1.08]"
           >
             Find Trusted Suppliers.{' '}
             <span className="bg-gradient-to-r from-teal-400 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
@@ -102,42 +142,62 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.25 }}
-            className="text-lg sm:text-xl text-slate-400 mb-12 max-w-2xl mx-auto"
+            className="text-lg sm:text-xl text-slate-300/90 mb-4 max-w-2xl mx-auto text-balance leading-relaxed"
           >
-            B2B marketplace with verified suppliers, RFQ flow, and quote comparison—all in one place.
+            <span className="text-white font-semibold">SmartB2B</span> connects buyers and verified suppliers for structured sourcing:
+            catalog discovery, RFQ carts, ranked quote comparison, and order handoff—built for teams who buy at scale.
+          </motion.p>
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.3 }}
+            className="text-sm sm:text-base text-slate-500 mb-12 max-w-xl mx-auto"
+          >
+            Trust scores, verification badges, and quote scoring help you decide faster—with audit-friendly activity on every RFQ.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.35 }}
-            className="flex flex-wrap gap-4 justify-center"
+            className="flex flex-col items-center gap-6"
           >
-            <Link to="/products">
-              <Button
-                size="lg"
-                className="gap-2 bg-coral-500 text-white hover:bg-coral-600 border-0 shadow-glow-coral hover:shadow-[0_0_50px_-12px_rgba(244,63,94,0.5)] transition-all duration-300 rounded-2xl px-8 py-4 text-base font-semibold group"
-              >
-                Browse Products
-                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-            <Link to="/cart">
-              <Button
-                size="lg"
-                className="gap-2 bg-white/10 text-white border border-white/20 hover:bg-white/15 backdrop-blur-sm rounded-2xl px-8 py-4"
-              >
-                <FileText className="h-5 w-5" /> Create RFQ
-              </Button>
-            </Link>
-            <Link to="/register">
-              <Button variant="secondary" size="lg" className="gap-2 bg-white/5 text-white border border-white/10 rounded-2xl px-8 py-4">
-                Sign up free
-              </Button>
-            </Link>
-            <Link to="/login">
-              <span className="text-slate-400 hover:text-white transition-colors font-medium cursor-pointer inline-block mt-2">
-                Already have an account? Log in →
-              </span>
+            <div className="flex flex-wrap gap-3 sm:gap-4 justify-center w-full max-w-3xl">
+              <Link to="/products">
+                <Button
+                  size="lg"
+                  className="gap-2 bg-coral-500 text-white hover:bg-coral-600 border-0 shadow-glow-coral hover:shadow-[0_0_50px_-12px_rgba(244,63,94,0.5)] transition-all duration-300 rounded-2xl px-8 py-4 text-base font-semibold group min-w-[200px] justify-center"
+                >
+                  Browse Products
+                  <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
+              <Link to="/cart">
+                <Button
+                  size="lg"
+                  className="gap-2 bg-teal-500 text-white hover:bg-teal-600 border-0 shadow-lg shadow-teal-900/30 rounded-2xl px-8 py-4 text-base font-semibold min-w-[200px] justify-center"
+                >
+                  <FileText className="h-5 w-5" /> RFQ Cart
+                </Button>
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center text-sm">
+              <Link to="/products?verified_only=true">
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="gap-2 !bg-white/10 !text-white !border-white/20 hover:!bg-white/15 backdrop-blur-sm rounded-xl px-5 py-3"
+                >
+                  <ShieldCheck className="h-4 w-4 text-teal-300" /> Verified suppliers
+                </Button>
+              </Link>
+              <Link to="/register">
+                <Button variant="secondary" size="lg" className="gap-2 !bg-white/5 !text-white !border-white/10 rounded-xl px-5 py-3">
+                  Sign up free
+                </Button>
+              </Link>
+            </div>
+            <Link to="/login" className="text-slate-400 hover:text-teal-300 transition-colors text-sm font-medium">
+              Already have an account? Log in →
             </Link>
           </motion.div>
         </div>
@@ -154,7 +214,7 @@ export default function Home() {
         transition={{ duration: 0.6 }}
         className="relative z-10 max-w-5xl mx-auto px-4 -mt-16 sm:-mt-20"
       >
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {stats.map((s, i) => (
             <motion.div
               key={s.label}
@@ -179,15 +239,31 @@ export default function Home() {
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="max-w-6xl mx-auto px-4 sm:px-6 py-16"
+          className="max-w-6xl mx-auto px-4 sm:px-6 py-20"
         >
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Featured categories</h2>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
+            <div>
+              <p className="section-heading mb-2">Catalog</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Featured categories</h2>
+              <p className="text-slate-500 mt-2 max-w-xl">Jump into high-intent sourcing lanes—each category opens a filtered product view.</p>
+            </div>
+            <Link to="/products" className="text-teal-600 font-semibold text-sm inline-flex items-center gap-1 hover:gap-2 transition-all shrink-0">
+              View all <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {categories.slice(0, 10).map((c) => (
               <Link key={c.id || c._id} to={`/products?category=${encodeURIComponent(c.name || c.slug || '')}`}>
-                <span className="inline-block px-4 py-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 font-medium">
-                  {c.name}
-                </span>
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="group h-full rounded-2xl border border-slate-200/90 bg-white p-5 shadow-md shadow-slate-200/40 hover:shadow-xl hover:border-teal-200/80 transition-all duration-300"
+                >
+                  <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 text-white flex items-center justify-center mb-4 shadow-lg shadow-teal-500/25 group-hover:scale-105 transition-transform">
+                    <FolderKanban className="h-5 w-5" />
+                  </div>
+                  <p className="font-semibold text-slate-900 group-hover:text-teal-700 transition-colors">{c.name}</p>
+                  <p className="text-xs text-slate-400 mt-1">Browse listings</p>
+                </motion.div>
               </Link>
             ))}
           </div>
@@ -199,22 +275,88 @@ export default function Home() {
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="max-w-6xl mx-auto px-4 sm:px-6 py-16"
+        className="max-w-6xl mx-auto px-4 sm:px-6 py-20"
       >
-        <h2 className="text-2xl font-bold text-slate-900 mb-8">How it works</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {howItWorks.map((h, i) => (
-            <div key={h.step} className="relative bg-white rounded-2xl border border-slate-200 p-6">
-              <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-700 font-bold flex items-center justify-center mb-3">{h.step}</div>
-              <h3 className="font-semibold text-slate-900">{h.title}</h3>
-              <p className="text-sm text-slate-500 mt-1">{h.desc}</p>
-              {i < howItWorks.length - 1 && (
-                <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-0.5 bg-slate-200" />
-              )}
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <p className="section-heading mb-2">Workflow</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">How it works</h2>
+          <p className="text-slate-500 mt-3">From catalog to contract-ready order in four clear steps.</p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-4">
+          {howItWorks.map((h) => (
+            <div key={h.step} className="relative">
+              <div className="h-full bg-white rounded-2xl border border-slate-200/90 p-6 shadow-md shadow-slate-200/30 hover:shadow-lg hover:border-teal-200/70 transition-all">
+                <div className="w-11 h-11 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-sm shadow-md shadow-teal-600/30 mb-4">
+                  {h.step}
+                </div>
+                <h3 className="font-bold text-slate-900 text-lg">{h.title}</h3>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">{h.desc}</p>
+              </div>
             </div>
           ))}
         </div>
       </motion.section>
+
+      {/* Verified suppliers spotlight */}
+      {verifiedSuppliers.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-6xl mx-auto px-4 sm:px-6 pb-8"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
+            <div>
+              <p className="section-heading mb-2">Trust</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Verified suppliers</h2>
+              <p className="text-slate-500 mt-2 max-w-xl">Platform-verified sellers with visible trust scores—start sourcing with confidence.</p>
+            </div>
+            <Link to="/products?verified_only=true" className="text-teal-600 font-semibold text-sm inline-flex items-center gap-1 hover:gap-2 transition-all">
+              See all verified <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {verifiedSuppliers.map((s) => (
+              <Link key={s._id} to={`/suppliers/${s._id}`}>
+                <motion.div
+                  whileHover={{ y: -3 }}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-md shadow-slate-200/40 hover:shadow-xl hover:border-teal-200 transition-all h-full flex flex-col"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-12 w-12 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center shrink-0 text-lg">
+                        {(s.name || '?').slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 truncate">{s.name}</p>
+                        {s.city || s.sampleCity ? (
+                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {s.city || s.sampleCity}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold px-2.5 py-1 ring-1 ring-emerald-200/80 shrink-0">
+                      <CheckCircle className="h-3.5 w-3.5" /> Verified
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                    {s.trustLevel && (
+                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">{s.trustLevel}</span>
+                    )}
+                    {s.trustScore != null && (
+                      <span className="px-2.5 py-1 rounded-full bg-teal-50 text-teal-800 font-medium">
+                        Trust {Math.round(s.trustScore)}%
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              </Link>
+            ))}
+          </div>
+        </motion.section>
+      )}
 
       {/* Featured products */}
       {featuredProducts.length > 0 && (
@@ -224,15 +366,33 @@ export default function Home() {
           viewport={{ once: true }}
           className="max-w-6xl mx-auto px-4 sm:px-6 py-16"
         >
-          <h2 className="text-2xl font-bold text-slate-900 mb-6">Featured products</h2>
+          <div className="flex items-end justify-between gap-4 mb-8">
+            <div>
+              <p className="section-heading mb-2">Spotlight</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Featured products</h2>
+            </div>
+            <Link to="/products" className="text-teal-600 font-semibold text-sm hidden sm:inline-flex items-center gap-1">
+              View catalog <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {featuredProducts.map((p) => (
               <Link key={p.id || p._id} to={`/product/${p.id || p._id}`}>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg hover:border-teal-200 transition-all">
-                  <p className="font-medium text-slate-900 truncate">{p.title}</p>
-                  <p className="text-teal-600 font-semibold mt-1">₹{p.price}</p>
-                  {p.category && <span className="text-xs text-slate-400">{p.category}</span>}
-                </div>
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-md shadow-slate-200/40 hover:shadow-xl hover:border-teal-200 transition-all group h-full flex flex-col"
+                >
+                  <div className="h-28 bg-gradient-to-br from-teal-500 via-teal-600 to-slate-800 relative">
+                    <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-20" />
+                    <span className="absolute bottom-3 left-3 text-white/90 text-xs font-semibold uppercase tracking-wide">
+                      {p.category || 'Product'}
+                    </span>
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col">
+                    <p className="font-semibold text-slate-900 line-clamp-2 text-sm group-hover:text-teal-700 transition-colors">{p.title}</p>
+                    <p className="text-teal-600 font-bold mt-2">₹{p.price}</p>
+                  </div>
+                </motion.div>
               </Link>
             ))}
           </div>
@@ -268,7 +428,7 @@ export default function Home() {
           viewport={{ once: true }}
           className="grid sm:grid-cols-3 gap-6"
         >
-          {features.map((f, i) => (
+          {features.map((f) => (
             <motion.div
               key={f.title}
               variants={item}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, FolderOpen, FileText, Package, Activity, LayoutDashboard, ShieldCheck } from 'lucide-react';
+import { Users, FolderOpen, FileText, Package, Activity, LayoutDashboard, ShieldCheck, Settings2 } from 'lucide-react';
 import { adminApi } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Card } from '../components/ui/Card';
@@ -124,87 +125,129 @@ export default function AdminPanel() {
     }
   };
 
-  if (loading && !users.length && !dashboard) return <div className="animate-pulse h-64 bg-neutral-100 rounded-xl" />;
+  if (loading && !users.length && !dashboard) {
+    return (
+      <div className="space-y-6">
+        <div className="h-24 rounded-3xl bg-slate-200 animate-pulse" />
+        <div className="h-12 rounded-xl bg-slate-100 animate-pulse max-w-lg" />
+        <div className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <h1 className="text-2xl font-bold mb-6">Admin Panel</h1>
-      <div className="flex gap-2 border-b border-neutral-200 mb-6 overflow-x-auto">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 max-w-[100rem]">
+      <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white p-6 sm:p-8 shadow-2xl shadow-slate-900/20 ring-1 ring-white/10 border-l-4 border-rose-400">
+        <div className="absolute inset-0 bg-mesh-dark opacity-50" />
+        <div className="absolute top-0 right-0 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center ring-1 ring-white/20">
+              <Settings2 className="h-7 w-7 text-rose-200" />
+            </div>
+            <div>
+              <p className="text-rose-200/90 text-xs font-semibold uppercase tracking-wider">Operations</p>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mt-1">Admin control center</h1>
+              <p className="text-slate-400 text-sm mt-2 max-w-xl">
+                Users, supplier verification, catalog, RFQs, orders, and immutable activity logs—high-impact actions are visually separated.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-slate-100/90 ring-1 ring-slate-200/80 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 border-b-2 whitespace-nowrap ${
-              tab === t.id ? 'border-primary-600 text-primary-600' : 'border-transparent text-neutral-600'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
+              tab === t.id
+                ? 'bg-white text-teal-800 shadow-md shadow-slate-200/50 ring-1 ring-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <t.icon className="h-4 w-4" /> {t.label}
+            <t.icon className="h-4 w-4 shrink-0" /> {t.label}
           </button>
         ))}
       </div>
 
       {tab === 'dashboard' && dashboard && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-          <Card className="p-4">
-            <p className="text-sm text-neutral-500">Total users</p>
-            <p className="text-2xl font-bold text-neutral-900">{dashboard.totalUsers ?? 0}</p>
+          <Card className="p-5 border-slate-200/90 shadow-md">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total users</p>
+            <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">{dashboard.totalUsers ?? 0}</p>
           </Card>
-          <Card className="p-4">
-            <p className="text-sm text-neutral-500">Verified suppliers</p>
-            <p className="text-2xl font-bold text-green-600">{dashboard.verifiedSuppliers ?? 0}</p>
+          <Card className="p-5 border-slate-200/90 shadow-md ring-1 ring-emerald-100/80 bg-emerald-50/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">Verified suppliers</p>
+            <p className="text-3xl font-bold text-emerald-700 mt-2 tabular-nums">{dashboard.verifiedSuppliers ?? 0}</p>
           </Card>
-          <Card className="p-4">
-            <p className="text-sm text-neutral-500">Pending suppliers</p>
-            <p className="text-2xl font-bold text-amber-600">{dashboard.pendingSuppliers ?? 0}</p>
+          <Card className="p-5 border-slate-200/90 shadow-md ring-1 ring-amber-100/80 bg-amber-50/20">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Pending suppliers</p>
+            <p className="text-3xl font-bold text-amber-700 mt-2 tabular-nums">{dashboard.pendingSuppliers ?? 0}</p>
           </Card>
-          <Card className="p-4">
-            <p className="text-sm text-neutral-500">Total RFQs</p>
-            <p className="text-2xl font-bold text-neutral-900">{dashboard.totalRfqs ?? 0}</p>
+          <Card className="p-5 border-slate-200/90 shadow-md">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total RFQs</p>
+            <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">{dashboard.totalRfqs ?? 0}</p>
           </Card>
-          <Card className="p-4">
-            <p className="text-sm text-neutral-500">Total quotes</p>
-            <p className="text-2xl font-bold text-neutral-900">{dashboard.totalQuotes ?? 0}</p>
+          <Card className="p-5 border-slate-200/90 shadow-md">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total quotes</p>
+            <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">{dashboard.totalQuotes ?? 0}</p>
           </Card>
-          <Card className="p-4">
-            <p className="text-sm text-neutral-500">Total orders</p>
-            <p className="text-2xl font-bold text-neutral-900">{dashboard.totalOrders ?? 0}</p>
+          <Card className="p-5 border-slate-200/90 shadow-md">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total orders</p>
+            <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">{dashboard.totalOrders ?? 0}</p>
           </Card>
         </div>
       )}
 
       {tab === 'suppliers' && (
-        <Card>
+        <Card className="border-slate-200/90 shadow-lg overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <p className="section-heading mb-1">Governance</p>
+            <p className="section-title">Supplier verification</p>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Name</th>
-                  <th className="text-left p-3">Email</th>
-                  <th className="text-left p-3">Company / City</th>
-                  <th className="text-left p-3">Trust score</th>
-                  <th className="text-left p-3">Verified</th>
-                  <th className="text-left p-3">Actions</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="text-left p-4 font-semibold">Name</th>
+                  <th className="text-left p-4 font-semibold">Email</th>
+                  <th className="text-left p-4 font-semibold">Company / City</th>
+                  <th className="text-left p-4 font-semibold">Trust score</th>
+                  <th className="text-left p-4 font-semibold">Verified</th>
+                  <th className="text-left p-4 font-semibold">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {(suppliers.length > 0 ? suppliers : users.filter((u) => u.role === 'seller')).map((u) => {
                   const uid = u._id || u.id;
                   return (
-                    <tr key={uid} className="border-b">
-                      <td className="p-3">{u.name}</td>
-                      <td className="p-3">{u.email}</td>
-                      <td className="p-3">{u.companyName || '—'} {u.city ? ` · ${u.city}` : ''}</td>
-                      <td className="p-3">
+                    <tr key={uid} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-4 font-medium text-slate-900">{u.name}</td>
+                      <td className="p-4 text-slate-600">{u.email}</td>
+                      <td className="p-4 text-slate-600">{u.companyName || '—'} {u.city ? ` · ${u.city}` : ''}</td>
+                      <td className="p-4 tabular-nums text-slate-800">
                         {u.trustScore != null ? `${Math.round(u.trustScore)}` : '—'}
-                        {u.trustLevel && <span className="text-neutral-500 text-xs ml-1">({u.trustLevel})</span>}
+                        {u.trustLevel && <span className="text-slate-400 text-xs ml-1">({u.trustLevel})</span>}
                       </td>
-                      <td className="p-3">{u.isVerifiedSupplier ? <Badge variant="success">Verified</Badge> : <Badge variant="default">Pending</Badge>}</td>
-                      <td className="p-3 flex gap-2">
-                        <Button size="sm" variant="secondary" onClick={() => handleVerify(uid, !u.isVerifiedSupplier)}>
-                          {u.isVerifiedSupplier ? 'Unverify' : 'Verify'}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleRecalculateScore(uid)}>Recalculate score</Button>
+                      <td className="p-4">{u.isVerifiedSupplier ? <Badge variant="success">Verified</Badge> : <Badge variant="warning">Pending</Badge>}</td>
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-2">
+                          {u.isVerifiedSupplier ? (
+                            <Button size="sm" variant="outlineDanger" className="rounded-lg" onClick={() => handleVerify(uid, !u.isVerifiedSupplier)}>
+                              Remove verification
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="successSolid" className="rounded-lg" onClick={() => handleVerify(uid, !u.isVerifiedSupplier)}>
+                              Verify supplier
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="rounded-lg text-slate-600" onClick={() => handleRecalculateScore(uid)}>
+                            Recalculate score
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -216,44 +259,60 @@ export default function AdminPanel() {
       )}
 
       {tab === 'users' && (
-        <Card>
+        <Card className="border-slate-200/90 shadow-lg overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <p className="section-heading mb-1">Directory</p>
+            <p className="section-title">All users</p>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Name</th>
-                  <th className="text-left p-3">Email</th>
-                  <th className="text-left p-3">Role</th>
-                  <th className="text-left p-3">Trust score</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-left p-3">Actions</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="text-left p-4 font-semibold">Name</th>
+                  <th className="text-left p-4 font-semibold">Email</th>
+                  <th className="text-left p-4 font-semibold">Role</th>
+                  <th className="text-left p-4 font-semibold">Trust score</th>
+                  <th className="text-left p-4 font-semibold">Status</th>
+                  <th className="text-left p-4 font-semibold">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {users.map((u) => (
-                  <tr key={u._id} className="border-b">
-                    <td className="p-3">{u.name}</td>
-                    <td className="p-3">{u.email}</td>
-                    <td className="p-3">{u.role}</td>
-                    <td className="p-3">
+                  <tr key={u._id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-4 font-medium text-slate-900">{u.name}</td>
+                    <td className="p-4 text-slate-600">{u.email}</td>
+                    <td className="p-4 capitalize text-slate-700">{u.role}</td>
+                    <td className="p-4 text-slate-700 tabular-nums">
                       {u.role === 'seller' && (u.trustScore != null ? `${Math.round(u.trustScore)}% (${u.trustLevel || '—'})` : '—')}
                       {u.role !== 'seller' && '—'}
                     </td>
-                    <td className="p-3">
+                    <td className="p-4">
                       {u.isBanned && <Badge variant="danger">Banned</Badge>}
-                      {u.role === 'seller' && u.isVerifiedSupplier && <Badge variant="success">Verified</Badge>}
+                      {u.role === 'seller' && u.isVerifiedSupplier && <Badge variant="success" className="ml-1">Verified</Badge>}
                     </td>
-                    <td className="p-3 flex gap-2">
-                      {u.role !== 'admin' && (
-                        <Button size="sm" variant="secondary" onClick={() => handleBan(u._id, !u.isBanned)}>
-                          {u.isBanned ? 'Unban' : 'Ban'}
-                        </Button>
-                      )}
-                      {u.role === 'seller' && (
-                        <Button size="sm" variant="secondary" onClick={() => handleVerify(u._id, !u.isVerifiedSupplier)}>
-                          {u.isVerifiedSupplier ? 'Unverify' : 'Verify'}
-                        </Button>
-                      )}
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-2">
+                        {u.role !== 'admin' &&
+                          (u.isBanned ? (
+                            <Button size="sm" variant="secondary" className="rounded-lg" onClick={() => handleBan(u._id, !u.isBanned)}>
+                              Unban user
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="outlineDanger" className="rounded-lg" onClick={() => handleBan(u._id, !u.isBanned)}>
+                              Ban user
+                            </Button>
+                          ))}
+                        {u.role === 'seller' &&
+                          (u.isVerifiedSupplier ? (
+                            <Button size="sm" variant="outlineDanger" className="rounded-lg" onClick={() => handleVerify(u._id, !u.isVerifiedSupplier)}>
+                              Unverify
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="successSolid" className="rounded-lg" onClick={() => handleVerify(u._id, !u.isVerifiedSupplier)}>
+                              Verify
+                            </Button>
+                          ))}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -286,22 +345,25 @@ export default function AdminPanel() {
       )}
 
       {tab === 'rfqs' && (
-        <Card>
+        <Card className="border-slate-200/90 shadow-lg overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <p className="section-title">RFQs</p>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">RFQ ID</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-left p-3">Items</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+                  <th className="text-left p-4 font-semibold">RFQ ID</th>
+                  <th className="text-left p-4 font-semibold">Status</th>
+                  <th className="text-left p-4 font-semibold">Items</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {rfqs.map((r) => (
-                  <tr key={r._id} className="border-b">
-                    <td className="p-3">#{r._id.slice(-6)}</td>
-                    <td className="p-3"><Badge>{r.status}</Badge></td>
-                    <td className="p-3">{r.items?.length || 0}</td>
+                  <tr key={r._id} className="hover:bg-slate-50/80">
+                    <td className="p-4 font-mono text-xs font-semibold">#{r._id.slice(-6)}</td>
+                    <td className="p-4"><Badge className="capitalize font-semibold">{r.status}</Badge></td>
+                    <td className="p-4 tabular-nums">{r.items?.length || 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -311,24 +373,31 @@ export default function AdminPanel() {
       )}
 
       {tab === 'orders' && (
-        <Card>
+        <Card className="border-slate-200/90 shadow-lg overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <p className="section-title">Orders</p>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Order ID</th>
-                  <th className="text-left p-3">Buyer</th>
-                  <th className="text-left p-3">Total</th>
-                  <th className="text-left p-3">Status</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+                  <th className="text-left p-4 font-semibold">Order ID</th>
+                  <th className="text-left p-4 font-semibold">Buyer</th>
+                  <th className="text-left p-4 font-semibold">Total</th>
+                  <th className="text-left p-4 font-semibold">Status</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {orders.map((o) => (
-                  <tr key={o._id} className="border-b">
-                    <td className="p-3">#{o._id.slice(-6)}</td>
-                    <td className="p-3">{o.buyerId?.name}</td>
-                    <td className="p-3">₹{o.totalAmount}</td>
-                    <td className="p-3"><Badge>{o.status}</Badge></td>
+                  <tr key={o._id} className="hover:bg-slate-50/80">
+                    <td className="p-4">
+                      <Link to={`/orders/${o._id}`} className="font-semibold text-teal-700 hover:text-teal-800 font-mono text-xs">
+                        #{o._id.slice(-6)}
+                      </Link>
+                    </td>
+                    <td className="p-4 text-slate-700">{o.buyerId?.name}</td>
+                    <td className="p-4 font-semibold tabular-nums">₹{o.totalAmount}</td>
+                    <td className="p-4"><Badge className="capitalize font-semibold">{o.status}</Badge></td>
                   </tr>
                 ))}
               </tbody>
@@ -338,16 +407,42 @@ export default function AdminPanel() {
       )}
 
       {tab === 'logs' && (
-        <Card>
-          <ul className="divide-y max-h-96 overflow-y-auto">
-            {logs.map((log) => (
-              <li key={log._id} className="p-4 text-sm">
-                <span className="text-neutral-500">{new Date(log.createdAt).toLocaleString()}</span>
-                <span className="ml-2 font-medium">{log.actionType}</span>
-                <span className="ml-2 text-neutral-600">{JSON.stringify(log.details || {})}</span>
-              </li>
-            ))}
-          </ul>
+        <Card className="border-slate-200/90 shadow-lg overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between gap-2">
+            <div>
+              <p className="section-heading mb-1">Immutable</p>
+              <p className="section-title">Activity logs</p>
+            </div>
+            <p className="text-xs text-slate-500 self-end max-w-xs">Sticky header while scrolling wide tables.</p>
+          </div>
+          <div className="overflow-x-auto max-h-[36rem] overflow-y-auto">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-100 shadow-sm border-b border-slate-200">
+                <tr className="text-xs uppercase tracking-wider text-slate-600">
+                  <th className="text-left p-4 font-semibold">Action</th>
+                  <th className="text-left p-4 font-semibold">Actor</th>
+                  <th className="text-left p-4 font-semibold">Role</th>
+                  <th className="text-left p-4 font-semibold">Target</th>
+                  <th className="text-left p-4 font-semibold whitespace-nowrap">When</th>
+                  <th className="text-left p-4 font-semibold">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {logs.map((log) => (
+                  <tr key={log._id || log.id} className="hover:bg-teal-50/30 odd:bg-slate-50/40">
+                    <td className="p-4 font-semibold text-slate-900 align-top">{log.action || log.actionType}</td>
+                    <td className="p-4 text-slate-700 align-top">{log.actor || log.adminId?.name || '—'}</td>
+                    <td className="p-4 align-top"><Badge variant="outline" className="text-[10px]">{log.actorRole || 'admin'}</Badge></td>
+                    <td className="p-4 text-xs text-slate-600 align-top font-mono">{log.targetType || '—'} · {log.targetId || '—'}</td>
+                    <td className="p-4 text-slate-500 whitespace-nowrap align-top text-xs tabular-nums">{log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</td>
+                    <td className="p-4 text-xs text-slate-600 max-w-[14rem] align-top break-all" title={typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}>
+                      {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </motion.div>

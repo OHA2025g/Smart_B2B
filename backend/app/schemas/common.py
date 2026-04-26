@@ -42,10 +42,22 @@ def serialize_doc(doc: dict | None) -> dict | None:
         elif isinstance(v, ObjectId):
             out[k] = str(v)
         elif isinstance(v, list):
-            out[k] = [serialize_doc(x) if isinstance(x, dict) else (str(x) if isinstance(x, ObjectId) else x) for x in v]
-        elif isinstance(v, dict) and "_id" in v:
+            out[k] = [_serialize_value(x) for x in v]
+        elif isinstance(v, dict):
             out[k] = serialize_doc(v)
     return out
+
+
+def _serialize_value(x: Any) -> Any:
+    if isinstance(x, dict):
+        return serialize_doc(x)
+    if isinstance(x, ObjectId):
+        return str(x)
+    if hasattr(x, "isoformat"):
+        return x.isoformat() if x else None
+    if isinstance(x, list):
+        return [_serialize_value(i) for i in x]
+    return x
 
 
 class PyObjectId(str):

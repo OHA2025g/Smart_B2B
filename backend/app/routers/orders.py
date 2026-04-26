@@ -1,13 +1,32 @@
 import datetime
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.schemas.common import success_response, error_response, serialize_doc
 from app.schemas.order import OrderStatusUpdate
 from app.services.workflow_events import emit_event
+from app.services.notifications import create_notification
 
 router = APIRouter()
+
+_ORDER_STATUS_EVENTS = {
+    "confirmed": ("ORDER_CONFIRMED", "Order confirmed"),
+    "processing": ("ORDER_PROCESSING", "Order is being processed"),
+    "shipped": ("ORDER_SHIPPED", "Order shipped"),
+    "delivered": ("ORDER_DELIVERED", "Order delivered"),
+    "cancelled": ("ORDER_CANCELLED", "Order cancelled"),
+}
+
+
+async def _company_display_name(db, user_oid):
+    if not user_oid:
+        return None
+    prof = await db.companyprofiles.find_one({"user": user_oid}, projection={"companyName": 1})
+    if prof and prof.get("companyName"):
+        return prof["companyName"]
+    u = await db.users.find_one({"_id": user_oid}, projection={"name": 1})
+    return (u or {}).get("name")
 
 
 async def _populate_order(db, order):
@@ -19,19 +38,25 @@ async def _populate_order(db, order):
         items.append(doc)
     buyer = await db.users.find_one({"_id": order["buyerId"]}, projection={"name": 1, "email": 1}) if order.get("buyerId") else None
     seller = await db.users.find_one({"_id": order["sellerId"]}, projection={"name": 1, "email": 1}) if order.get("sellerId") else None
+    buyer_company = await _company_display_name(db, order.get("buyerId"))
+    seller_company = await _company_display_name(db, order.get("sellerId"))
     out = serialize_doc(order)
     if out:
         out["items"] = items
         out["buyerId"] = serialize_doc(buyer) if buyer else None
         out["sellerId"] = serialize_doc(seller) if seller else None
+        out["buyerCompany"] = buyer_company
+        out["sellerCompany"] = seller_company
     return out
 
 
 @router.get("/me")
-async def get_my(request: Request, user: dict = Depends(get_current_user)):
+async def get_my(request: Request, status: str | None = Query(None), user: dict = Depends(get_current_user)):
     db = get_db()
     uid = ObjectId(user["id"])
     filter_q = {"sellerId": uid} if user.get("role") == "seller" else {"buyerId": uid}
+    if status:
+        filter_q["status"] = status
     cursor = db.orders.find(filter_q).sort("createdAt", -1)
     orders = [await _populate_order(db, o) async for o in cursor]
     return success_response(data={"orders": orders})
@@ -82,7 +107,27 @@ async def update_status(id: str, request: Request, body: OrderStatusUpdate, user
         raise HTTPException(status_code=404, detail=error_response("Order not found.", "NOT_FOUND", path=str(request.url.path)))
     if str(order["sellerId"]) != user["id"]:
         raise HTTPException(status_code=403, detail=error_response("Only seller can update order status.", "FORBIDDEN", path=str(request.url.path)))
+    prev = order.get("status")
     await db.orders.update_one({"_id": oid}, {"$set": {"status": body.status}})
-    await emit_event("order", oid, ObjectId(user["id"]), "seller", "ORDER_STATUS_CHANGED", "Order status changed", {"from": order.get("status"), "to": body.status})
+    etype, elabel = _ORDER_STATUS_EVENTS.get(body.status, ("ORDER_STATUS_CHANGED", f"Status → {body.status}"))
+    await emit_event(
+        "order",
+        oid,
+        ObjectId(user["id"]),
+        "seller",
+        etype,
+        elabel,
+        {"from": prev, "to": body.status},
+    )
+    buyer_id = order.get("buyerId")
+    if buyer_id:
+        await create_notification(
+            buyer_id,
+            "Order update",
+            f"Your order status is now: {body.status}.",
+            "order_status",
+            "order",
+            str(oid),
+        )
     updated = await db.orders.find_one({"_id": oid})
     return success_response(data={"order": await _populate_order(db, updated)})
