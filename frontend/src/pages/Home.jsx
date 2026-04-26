@@ -144,7 +144,7 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.25 }}
             className="text-lg sm:text-xl text-slate-300/90 mb-4 max-w-2xl mx-auto text-balance leading-relaxed"
           >
-            <span className="text-white font-semibold">SmartB2B</span> connects buyers and verified suppliers for structured sourcing:
+            <span className="text-white font-semibold">B2Bभारत</span> connects buyers and verified suppliers for structured sourcing:
             catalog discovery, RFQ carts, ranked quote comparison, and order handoff—built for teams who buy at scale.
           </motion.p>
           <motion.p
@@ -414,7 +414,7 @@ export default function Home() {
           className="text-center mb-16"
         >
           <motion.h2 variants={item} className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-3">
-            Why SmartB2B?
+            Why B2Bभारत?
           </motion.h2>
           <motion.p variants={item} className="text-slate-500 text-lg max-w-xl mx-auto">
             Everything you need to source and sell—with trust built in.
@@ -461,7 +461,7 @@ export default function Home() {
           <Quote className="absolute top-8 left-8 h-12 w-12 text-white/10" />
           <div className="relative">
             <p className="text-xl sm:text-2xl font-medium text-slate-200 leading-relaxed mb-6">
-              “SmartB2B cut our sourcing time in half. We get verified quotes in days, not weeks.”
+              “B2Bभारत cut our sourcing time in half. We get verified quotes in days, not weeks.”
             </p>
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-lg font-bold">
@@ -489,7 +489,7 @@ export default function Home() {
             <Package className="h-14 w-14 mx-auto mb-6 text-white/80 animate-float" />
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3">Ready to grow your business?</h2>
             <p className="text-teal-100 text-lg mb-10 max-w-md mx-auto">
-              Join buyers and suppliers who use SmartB2B to discover products and close deals.
+              Join buyers and suppliers who use B2Bभारत to discover products and close deals.
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               <Link to="/register">
@@ -514,7 +514,7 @@ export default function Home() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Package className="h-6 w-6 text-teal-600" />
-              <span className="font-semibold text-slate-800">SmartB2B</span>
+              <span className="font-semibold text-slate-800">B2Bभारत</span>
             </div>
             <div className="flex gap-6 text-sm text-slate-600">
               <Link to="/products" className="hover:text-teal-600">Products</Link>
@@ -523,7 +523,7 @@ export default function Home() {
               <Link to="/login" className="hover:text-teal-600">Log in</Link>
             </div>
           </div>
-          <p className="text-slate-500 text-sm mt-6">© SmartB2B — Intelligent B2B Marketplace. Find trusted suppliers, raise RFQs, compare quotes.</p>
+          <p className="text-slate-500 text-sm mt-6">© B2Bभारत — Intelligent B2B Marketplace. Find trusted suppliers, raise RFQs, compare quotes.</p>
         </div>
       </footer>
     </div>

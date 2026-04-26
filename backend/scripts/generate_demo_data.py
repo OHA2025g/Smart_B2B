@@ -1,5 +1,5 @@
 """
-Production-style demo data generation for SmartB2B mid-term demo.
+Production-style demo data generation for B2Bभारत mid-term demo.
 
 Populates: users, companyprofiles, categories, products, wishlistitems,
 cartitems, rfqs, quotes, orders, supplier_scores, adminactionlogs.
@@ -391,12 +391,26 @@ async def create_rfqs(db, buyer_ids, products, products_by_seller):
         ]
         status = random.choices(RFQ_STATUSES, weights=RFQ_STATUS_WEIGHTS)[0]
         created_at = now - timedelta(days=random.randint(0, 60))
+        req_by = created_at + timedelta(days=random.randint(10, 50))
         doc = {
             "buyerId": buyer_id,
             "items": items,
             "status": status,
             "createdAt": created_at,
             "validUntil": created_at + timedelta(days=7),
+            "deliveryLocation": random.choice(
+                [
+                    "Distribution Center North, Chicago, IL",
+                    "Plant 2, Houston, TX",
+                    "Warehouse B, Newark, NJ",
+                    "Site 7, Phoenix, AZ",
+                ]
+            ),
+            "requiredByDate": req_by,
+            "buyerNotes": "Please confirm lead time and packaging."
+            if random.random() > 0.5
+            else None,
+            "priority": random.choice(["normal", "urgent"]),
             "updated_at": now,
         }
         docs.append(doc)
@@ -512,6 +526,9 @@ async def create_quotes_and_orders_final(
             "totalAmount": o["totalAmount"],
             "status": next_demo_order_status_for_seller(o["sellerId"]),
             "createdAt": now - timedelta(days=random.randint(0, 25)),
+            "paymentStatus": random.choice(
+                ["payment_pending", "escrow_held", "released", "payment_pending", "escrow_held", "refunded"]
+            ),
         })
 
     if run_order_backfill:
@@ -544,6 +561,9 @@ async def create_quotes_and_orders_final(
                     "totalAmount": round(total, 2),
                     "status": next_demo_order_status_for_seller(qd["sellerId"]),
                     "createdAt": now - timedelta(days=random.randint(0, 25)),
+                    "paymentStatus": random.choice(
+                        ["payment_pending", "escrow_held", "released", "payment_pending", "escrow_held", "refunded"]
+                    ),
                 })
                 used_quote_ids.add(qid)
                 need -= 1
@@ -556,44 +576,15 @@ async def create_quotes_and_orders_final(
 
 
 async def create_supplier_scores(db, seller_ids):
-    """Compute and store trust score for each seller using the formula."""
-    now = _now()
+    """Store trust scores using the same service as the API (weighted formula)."""
+    from app.services.supplier_score import recalculate_supplier_score
+
     for sid in seller_ids:
-        profile = await db.companyprofiles.find_one({"user": sid})
-        profile_score = 0.0
-        if profile:
-            fields = ["companyName", "description", "city", "state", "country", "phone", "website", "gstNumber"]
-            filled = sum(1 for f in fields if profile.get(f))
-            profile_score = min(100, (filled / len(fields)) * 100) if fields else 0
-        user = await db.users.find_one({"_id": sid})
-        verified_status = 100.0 if user and user.get("isVerifiedSupplier") else 0.0
-        quotes_c = await db.quotes.count_documents({"sellerId": sid})
-        my_prod_ids = [p["_id"] for p in await db.products.find({"seller": sid}, {"_id": 1}).to_list(None)]
-        rfqs_c = await db.rfqs.count_documents({"items.productId": {"$in": my_prod_ids}}) if my_prod_ids else 0
-        response_rate = min(100, (quotes_c / rfqs_c) * 100) if rfqs_c else 80.0
-        products_c = await db.products.count_documents({"seller": sid, "isActive": True})
-        product_strength = min(100, products_c * 10)
-        buyer_rating = 70.0
-        total = (
-            0.30 * profile_score + 0.20 * response_rate + 0.20 * product_strength
-            + 0.15 * buyer_rating + 0.15 * verified_status
-        )
-        total = round(min(100, max(0, total)), 1)
-        trust_level = _trust_level(total)
-        await db.supplier_scores.update_one(
-            {"seller_id": sid},
-            {"$set": {
-                "profile_completeness": round(profile_score, 1),
-                "response_rate": round(response_rate, 1),
-                "product_strength": round(product_strength, 1),
-                "buyer_rating": buyer_rating,
-                "verified_status": verified_status,
-                "total_score": total,
-                "trust_level": trust_level,
-                "updated_at": now,
-            }},
-            upsert=True,
-        )
+        try:
+            await recalculate_supplier_score(sid)
+        except Exception:
+            continue
+
 
 
 async def create_workflow_events_and_notifications(db, rfqs, admin_id, seller_ids, buyer_ids):
@@ -876,6 +867,9 @@ async def boost_preserved_demo_accounts(db, seller_id, buyer_id, admin_id, categ
                 "totalAmount": round(total, 2),
                 "status": next_demo_order_status_for_seller(seller_id),
                 "createdAt": now - timedelta(days=random.randint(0, 22)),
+                "paymentStatus": random.choice(
+                    ["payment_pending", "escrow_held", "released", "payment_pending", "escrow_held", "refunded"]
+                ),
             })
             need_orders -= 1
 

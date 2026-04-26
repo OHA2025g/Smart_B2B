@@ -158,10 +158,32 @@ export default function SupplierProfile() {
                 <p className="text-xs text-slate-500 mt-1 font-medium">Score</p>
               </div>
               <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-center">
-                <p className="text-lg font-bold text-slate-800 leading-tight">{profile.response_rate ?? 0}%</p>
-                <p className="text-xs text-slate-500 mt-1 font-medium">Response rate</p>
+                <p className="text-lg font-bold text-slate-800 leading-tight">{profile.operational_response_rate ?? profile.response_rate ?? 0}%</p>
+                <p className="text-xs text-slate-500 mt-1 font-medium">Quote response (RFQs)</p>
               </div>
             </div>
+            {profile.score_breakdown && profile.score_breakdown.weights && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-700 space-y-2">
+                <p className="font-semibold text-slate-800 text-sm">How this score is calculated</p>
+                <p className="text-slate-500 leading-relaxed">
+                  Weighted: {Math.round((profile.score_breakdown.weights?.profile_completeness ?? 0.3) * 100)}% profile ·{' '}
+                  {Math.round((profile.score_breakdown.weights?.response_rate ?? 0.2) * 100)}% response (model) ·{' '}
+                  {Math.round((profile.score_breakdown.weights?.product_strength ?? 0.2) * 100)}% catalog strength ·{' '}
+                  {Math.round((profile.score_breakdown.weights?.buyer_rating ?? 0.15) * 100)}% rating signal ·{' '}
+                  {Math.round((profile.score_breakdown.weights?.verified_status ?? 0.15) * 100)}% admin verification
+                </p>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                  <div className="flex justify-between gap-2"><dt>Profile completeness</dt><dd className="font-mono">{(profile.score_breakdown.profile_completeness ?? 0).toFixed(1)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Response (trust model)</dt><dd className="font-mono">{(profile.score_breakdown.response_rate ?? 0).toFixed(1)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Product strength</dt><dd className="font-mono">{(profile.score_breakdown.product_strength ?? 0).toFixed(1)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Buyer rating signal</dt><dd className="font-mono">{(profile.score_breakdown.buyer_rating ?? 0).toFixed(1)}</dd></div>
+                  <div className="flex justify-between gap-2 sm:col-span-2"><dt>Verified status (100 if verified)</dt><dd className="font-mono">{(profile.score_breakdown.verified_status ?? 0).toFixed(1)}</dd></div>
+                </dl>
+                {profile.trust_score_updated_at && (
+                  <p className="text-[10px] text-slate-400">Updated {formatDateTimeIst(profile.trust_score_updated_at)}</p>
+                )}
+              </div>
+            )}
           </div>
         </Card>
 
@@ -170,7 +192,7 @@ export default function SupplierProfile() {
             <BarChart3 className="h-5 w-5 text-teal-600" />
             <div>
               <h2 className="section-title">Performance metrics</h2>
-              <p className="text-sm text-slate-500">Operational footprint on SmartB2B.</p>
+              <p className="text-sm text-slate-500">Operational footprint on B2Bभारत.</p>
             </div>
           </div>
           <div className="p-5 sm:p-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -268,7 +290,7 @@ export default function SupplierProfile() {
             {profile.recent_activity.map((ev) => (
               <li key={ev.id || ev._id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
                 <span className="text-xs font-medium text-slate-400 tabular-nums shrink-0 sm:w-44">
-                  {ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}
+                  {ev.created_at ? formatDateTimeIst(ev.created_at) : ''}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900">{ev.event_label}</p>

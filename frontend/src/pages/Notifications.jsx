@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Badge';
+import { formatLongWeekdayDateIst, formatTimeIst } from '../lib/istTime';
 
 function getLink(notification) {
   const type = notification.related_entity_type;
@@ -21,8 +22,7 @@ function getLink(notification) {
 
 function dayKey(ts) {
   if (!ts) return 'Unknown date';
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+  return formatLongWeekdayDateIst(ts) || 'Unknown date';
 }
 
 export default function Notifications() {
@@ -126,16 +126,16 @@ export default function Notifications() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className={`font-semibold ${n.is_read ? 'text-slate-700' : 'text-slate-900'}`}>{n.title}</p>
+                            <p className={`font-semibold ${n.is_read ? 'text-slate-700' : 'text-slate-900'}`}>{n.title ?? 'Notification'}</p>
                             {!n.is_read && (
                               <Badge variant="teal" className="text-[10px] font-bold">
                                 New
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-slate-500 mt-1 leading-relaxed">{n.message}</p>
+                          <p className="text-sm text-slate-500 mt-1 leading-relaxed">{n.message ?? '—'}</p>
                           <p className="text-xs text-slate-400 mt-3 font-medium tabular-nums">
-                            {n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            {n.created_at ? formatTimeIst(n.created_at) : ''}
                           </p>
                           {link && (
                             <span className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-teal-600">
@@ -170,7 +170,7 @@ export default function Notifications() {
                   );
                   return link ? (
                     <motion.div
-                      key={n.id || n._id}
+                      key={n.id || n._id || i}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.03 }}
@@ -181,7 +181,7 @@ export default function Notifications() {
                     </motion.div>
                   ) : (
                     <motion.div
-                      key={n.id || n._id}
+                      key={n.id || n._id || i}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.03 }}

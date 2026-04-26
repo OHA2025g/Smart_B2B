@@ -154,23 +154,13 @@ async def seed():
         )
         print("Cart item added for buyer2")
 
-    # Supplier scores for sellers
-    import datetime
+    # Supplier scores — weighted formula (see app.services.supplier_score)
+    from app.services.supplier_score import recalculate_supplier_score
+
     for s in [seller1, seller2]:
         if s:
-            score_doc = {
-                "seller_id": s["_id"],
-                "profile_completeness": 85.0 if s.get("isVerifiedSupplier") else 40.0,
-                "response_rate": 90.0,
-                "product_strength": 80.0,
-                "buyer_rating": 70.0,
-                "verified_status": 100.0 if s.get("isVerifiedSupplier") else 0.0,
-                "total_score": 82.0 if s.get("isVerifiedSupplier") else 45.0,
-                "trust_level": "Trusted" if s.get("isVerifiedSupplier") else "Moderate",
-                "updated_at": datetime.datetime.utcnow(),
-            }
-            await db.supplier_scores.update_one({"seller_id": s["_id"]}, {"$set": score_doc}, upsert=True)
-    print("Supplier scores upserted")
+            await recalculate_supplier_score(s["_id"])
+    print("Supplier scores recalculated")
 
     if all_products and buyer1:
         rfq_exists = await db.rfqs.find_one({"buyerId": buyer1["_id"]})

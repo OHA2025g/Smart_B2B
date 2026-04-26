@@ -19,7 +19,7 @@ async def root(request: Request):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartB2B API</title>
+  <title>B2Bभारत API</title>
   <style>
     * {{ box-sizing: border-box; }}
     body {{ font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 720px; margin: 0 auto; padding: 2rem; color: #1a1a1a; }}
@@ -35,7 +35,7 @@ async def root(request: Request):
   </style>
 </head>
 <body>
-  <h1>SmartB2B API</h1>
+  <h1>B2Bभारत API</h1>
   <p class="meta">
     <strong>Version</strong> {VERSION} &bull;
     <strong>ENV</strong> {env} &bull;
@@ -100,7 +100,7 @@ async def health(request: Request):
 @router.get("/api")
 async def api_index():
     return {
-        "name": "SmartB2B API",
+        "name": "B2Bभारत API",
         "version": VERSION,
         "routes": [
             {"path": "/api/auth", "description": "Authentication: register, login, me"},

@@ -77,7 +77,7 @@ export default function Products() {
 
   useEffect(() => {
     fetchProducts();
-  }, [verifiedOnly]);
+  }, [verifiedOnly]); // eslint-disable-line react-hooks/exhaustive-deps -- only re-fetch on verified filter
 
   const handleFilter = (e) => {
     e.preventDefault();

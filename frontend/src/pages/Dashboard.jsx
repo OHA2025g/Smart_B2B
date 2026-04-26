@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { Package, MessageSquare, TrendingUp, Users, Activity, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { formatDateTimeIst } from '../lib/istTime';
 import { inquiriesApi, adminApi, rfqApi, cartApi, wishlistApi, ordersApi, buyerDashboardApi, sellerDashboardApi } from '../api/client';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
@@ -358,7 +359,7 @@ export default function Dashboard() {
                       <span className="font-semibold text-slate-900">{log.action || log.actionType}</span>
                       <div className="flex flex-wrap gap-x-3 text-xs text-slate-500">
                         <span>{log.actor || 'Admin'}</span>
-                        <span className="tabular-nums">{log.createdAt ? new Date(log.createdAt).toLocaleString() : ''}</span>
+                        <span className="tabular-nums">{log.createdAt ? formatDateTimeIst(log.createdAt) : ''}</span>
                       </div>
                     </li>
                   ))}

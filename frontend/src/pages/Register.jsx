@@ -50,7 +50,7 @@ export default function Register() {
           <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-30" />
           <Link to="/" className="relative inline-flex items-center gap-2 text-white/95 hover:text-white mb-8 transition-colors">
             <ShoppingBag className="h-8 w-8" />
-            <span className="font-bold text-xl">SmartB2B</span>
+            <span className="font-bold text-xl">B2Bभारत</span>
           </Link>
           <h2 className="relative text-2xl font-bold mb-4">Create an account</h2>
           <p className="relative text-slate-300 mb-8">Join as a buyer or seller to get started.</p>

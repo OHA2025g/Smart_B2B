@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { ordersApi } from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Card } from '../components/ui/Card';
+import { formatDateTimeIst } from '../lib/istTime';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 
@@ -63,6 +64,7 @@ export default function OrderDetail() {
   const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [paymentUpdating, setPaymentUpdating] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -100,6 +102,22 @@ export default function OrderDetail() {
       toast.add('Update failed', 'error');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handlePayment = async (paymentStatus) => {
+    setPaymentUpdating(true);
+    try {
+      await ordersApi.updatePayment(id, paymentStatus);
+      const { data } = await ordersApi.getById(id);
+      setOrder(data.data.order);
+      const tr = await ordersApi.getTimeline(id);
+      setTimeline(tr.data.data.timeline || []);
+      toast.add('Payment status updated', 'success');
+    } catch {
+      toast.add('Update failed', 'error');
+    } finally {
+      setPaymentUpdating(false);
     }
   };
 
@@ -174,7 +192,7 @@ export default function OrderDetail() {
             </div>
             <div>
               <p className="section-heading mb-1">Placed</p>
-              <p className="text-slate-700">{order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}</p>
+              <p className="text-slate-700">{order.createdAt ? formatDateTimeIst(order.createdAt) : '—'}</p>
             </div>
           </div>
           <div className="rounded-2xl bg-gradient-to-br from-teal-50 to-slate-50 border border-teal-100/80 p-6 flex flex-col justify-center">
@@ -282,7 +300,7 @@ export default function OrderDetail() {
       <Card id="smartb2b-po-invoice" className="print-invoice-root border-slate-300 border-2 overflow-hidden bg-white">
         <div className="px-6 py-5 border-b border-slate-200 flex flex-wrap items-start justify-between gap-4 bg-slate-50">
           <div>
-            <p className="text-2xl font-bold text-teal-700 tracking-tight">SmartB2B</p>
+            <p className="text-2xl font-bold text-teal-700 tracking-tight">B2Bभारत</p>
             <p className="text-xs text-slate-500 mt-1">B2B marketplace · Purchase order &amp; tax invoice (demo)</p>
           </div>
           <div className="text-right text-sm">
@@ -303,7 +321,7 @@ export default function OrderDetail() {
           </div>
           <div>
             <p className="section-heading mb-1">Order date</p>
-            <p className="font-medium text-slate-800">{order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}</p>
+            <p className="font-medium text-slate-800">{order.createdAt ? formatDateTimeIst(order.createdAt) : '—'}</p>
           </div>
           <div>
             <p className="section-heading mb-1">Status</p>
@@ -361,7 +379,7 @@ export default function OrderDetail() {
             </p>
           </div>
           <p className="mt-4 text-xs text-slate-500">
-            Terms: Goods as per agreed specifications. SmartB2B provides a record of the order only.
+            Terms: Goods as per agreed specifications. B2Bभारत provides a record of the order only.
           </p>
         </div>
         <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 print:hidden">
@@ -371,35 +389,69 @@ export default function OrderDetail() {
         </div>
       </Card>
 
-      <div className="relative overflow-hidden rounded-3xl border border-slate-700/50 bg-slate-900 text-white shadow-2xl shadow-slate-900/25 print:hidden">
-        <div className="absolute inset-0 bg-mesh-dark opacity-60" />
-        <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/15 rounded-full blur-3xl" />
-        <div className="relative p-6 sm:p-8">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/20">
-              <Shield className="h-8 w-8 text-teal-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-bold tracking-tight">Escrow &amp; secure settlement</h2>
-                <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200 ring-1 ring-amber-400/30">
-                  Roadmap
-                </span>
-              </div>
-              <p className="text-sm text-slate-300 mt-3 leading-relaxed max-w-2xl">
-                Funds will be held in escrow until delivery confirmation—reducing counterparty risk for both sides.
-                This card is a <span className="text-white font-medium">product-grade placeholder</span> for investor and
-                mid-term demos; no payments are processed in this build.
-              </p>
-              <ul className="mt-4 grid sm:grid-cols-3 gap-3 text-xs text-slate-400">
-                <li className="rounded-xl bg-white/5 px-3 py-2 ring-1 ring-white/10">Milestone release</li>
-                <li className="rounded-xl bg-white/5 px-3 py-2 ring-1 ring-white/10">Dispute window</li>
-                <li className="rounded-xl bg-white/5 px-3 py-2 ring-1 ring-white/10">Audit trail</li>
-              </ul>
-            </div>
+      <Card className="print:hidden border-slate-200/90">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="section-title flex items-center gap-2">
+              <Shield className="h-5 w-5 text-teal-600" />
+              Escrow payment protection
+            </h2>
+            <Badge variant="primary">{(order.paymentStatus || 'payment_pending').replace(/_/g, ' ')}</Badge>
           </div>
+          <p className="text-xs text-slate-500 mt-2 max-w-3xl">
+            Communication is monitored to maintain buyer-seller trust. No real payment provider is connected—use the demo
+            actions to walk through a typical release workflow.
+          </p>
         </div>
-      </div>
+        <ol className="p-5 sm:p-6 space-y-2 text-sm text-slate-700 list-decimal list-inside">
+          <li>Buyer initiates payment</li>
+          <li>B2Bभारत holds amount securely (escrow)</li>
+          <li>Seller ships goods (order status)</li>
+          <li>Buyer confirms delivery</li>
+          <li>Payment released to seller (or refunded if applicable)</li>
+        </ol>
+        <div className="px-5 pb-5 flex flex-wrap gap-2 print:hidden">
+          <Button
+            type="button"
+            size="sm"
+            disabled={paymentUpdating}
+            onClick={() => handlePayment('payment_pending')}
+            variant="secondary"
+          >
+            1. Mark payment initiated
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={paymentUpdating}
+            onClick={() => handlePayment('escrow_held')}
+            variant="secondary"
+          >
+            2. Mark escrow held
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={paymentUpdating}
+            onClick={() => handlePayment('released')}
+            variant="primary"
+          >
+            3. Mark released
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={paymentUpdating}
+            onClick={() => handlePayment('refunded')}
+            variant="ghost"
+            className="text-amber-700"
+          >
+            Mark refunded
+          </Button>
+        </div>
+      </Card>
+
+
 
       {displayTimeline.length > 0 && (
         <Card className="border-slate-200/90 print:hidden">
@@ -416,7 +468,7 @@ export default function OrderDetail() {
             {displayTimeline.map((e) => (
               <li key={e._id || e.id} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 text-sm border-b border-slate-50 last:border-0 pb-4 last:pb-0">
                 <span className="text-xs font-medium text-slate-400 tabular-nums shrink-0 sm:w-44">
-                  {e.created_at ? new Date(e.created_at).toLocaleString() : ''}
+                  {e.created_at ? formatDateTimeIst(e.created_at) : ''}
                 </span>
                 <span className="font-semibold text-slate-900 flex-1">{e.event_label}</span>
                 <Badge variant="outline" className="w-fit text-[10px]">

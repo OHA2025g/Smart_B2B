@@ -54,7 +54,7 @@ export default function Login() {
           <div className="absolute inset-0 bg-grid-pattern bg-grid opacity-30" />
           <Link to="/" className="relative inline-flex items-center gap-2 text-white/95 hover:text-white mb-8 transition-colors">
             <ShoppingBag className="h-8 w-8" />
-            <span className="font-bold text-xl">SmartB2B</span>
+            <span className="font-bold text-xl">B2Bभारत</span>
           </Link>
           <h2 className="relative text-2xl font-bold mb-4">Welcome back</h2>
           <p className="relative text-slate-300 mb-8">Sign in to manage your listings and inquiries.</p>

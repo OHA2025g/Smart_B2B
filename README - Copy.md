@@ -1,8 +1,8 @@
-# SmartB2B – Intelligent B2B Marketplace
+# B2Bभारत – Intelligent B2B Marketplace
 
 **Tagline:** *Smarter B2B. Real Deals.*
 
-SmartB2B is a full-stack B2B marketplace where **buyers** discover products, build wishlists and RFQ carts, raise RFQs, compare seller quotes (with trust and quote scores), and place orders; **sellers** list products, respond with quotes, and manage order fulfillment; **admins** verify suppliers, moderate users, manage categories, and monitor RFQs, orders, and analytics.
+B2Bभारत is a full-stack B2B marketplace where **buyers** discover products, build wishlists and RFQ carts, raise RFQs, compare seller quotes (with trust and quote scores), and place orders; **sellers** list products, respond with quotes, and manage order fulfillment; **admins** verify suppliers, moderate users, manage categories, and monitor RFQs, orders, and analytics.
 
 This README is the main project overview: **tech stack**, **workflows**, **data model**, **API surface**, **how to run**, and **credentials**. Deeper change logs and file-level notes live in [`update.md`](update.md); specs and deliverables in [`DELIVERABLES.md`](DELIVERABLES.md) and [`PHASE2.md`](PHASE2.md).
 
@@ -90,7 +90,7 @@ This README is the main project overview: **tech stack**, **workflows**, **data 
 ## Repository structure
 
 ```
-SmartB2B/
+B2Bभारत/
 ├── backend/
 │   ├── app/
 │   │   ├── config.py

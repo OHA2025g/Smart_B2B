@@ -1,5 +1,5 @@
 /**
- * Design system tokens for SmartB2B (Phase 1.6)
+ * Design system tokens for B2Bभारत (Phase 1.6)
  * Use with Tailwind: colors and spacing are extended in tailwind.config.js
  */
 export const theme = {

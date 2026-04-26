@@ -1,4 +1,4 @@
-from typing import Optional
+﻿from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -15,5 +15,7 @@ class QuoteUpdate(BaseModel):
     items: Optional[list[QuoteItemUpdate]] = None
     message: Optional[str] = Field(None, max_length=5000)
     commitment_note: Optional[str] = None
+    deliveryCommitment: Optional[str] = Field(None, max_length=2000)
+    warrantyOrSupportNote: Optional[str] = Field(None, max_length=2000)
     termsAndConditions: Optional[str] = Field(None, max_length=10000)
     quoteValidUntil: Optional[datetime] = None

@@ -1,5 +1,29 @@
 from typing import Any
 from bson import ObjectId
+
+
+def coerce_object_id(value):
+    """Single value to ObjectId for DB queries; None if invalid."""
+    if value is None:
+        return None
+    if isinstance(value, ObjectId):
+        return value
+    try:
+        return ObjectId(str(value))
+    except Exception:
+        return None
+
+
+def coerce_object_id_list(values):
+    """Mixed str/ObjectId list for Mongo $in; skips invalid entries."""
+    out = []
+    for v in values or []:
+        oid = coerce_object_id(v)
+        if oid is not None:
+            out.append(oid)
+    return out
+
+
 from pydantic import BaseModel, ConfigDict
 
 # Use same response shape as Node API: { success, data? | message?, ... }

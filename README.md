@@ -1,14 +1,14 @@
-# SmartB2B – Intelligent B2B Marketplace
+# B2Bभारत – Intelligent B2B Marketplace
 
 **Tagline:** *Smarter B2B. Real Deals.*
 
-SmartB2B is a full-stack B2B marketplace where **buyers** discover products, build wishlists and RFQ carts, raise RFQs, compare seller quotes (with trust and quote scores), and place orders; **sellers** list products, respond with quotes, and manage order fulfillment; **admins** verify suppliers, moderate users, manage categories, and monitor RFQs, orders, and analytics.
+B2Bभारत is a full-stack B2B marketplace where **buyers** discover products, build wishlists and RFQ carts, raise RFQs, compare seller quotes (with trust and quote scores), and place orders; **sellers** list products, respond with quotes, and manage order fulfillment; **admins** verify suppliers, moderate users, manage categories, and monitor RFQs, orders, and analytics.
 
 This README is the main project overview: **everything the product does today**, **tech stack**, **workflows**, **data model**, **API surface**, **how to run**, and **credentials**. Deeper change logs and file-level notes live in [`update.md`](update.md); specs and deliverables in [`DELIVERABLES.md`](DELIVERABLES.md) and [`PHASE2.md`](PHASE2.md).
 
 ---
 
-## What SmartB2B can do today (full feature catalog)
+## What B2Bभारत can do today (full feature catalog)
 
 Below is a practical list of **what is implemented end-to-end** (UI + API unless noted). Use it as the single place to see scope of the live website and backend.
 
@@ -16,6 +16,7 @@ Below is a practical list of **what is implemented end-to-end** (UI + API unless
 
 - **Landing page (`/`)** — Animated hero (Framer Motion), value props (verified suppliers, RFQ flow, B2B network), step-by-step “how it works,” **live stats** from the API (category count, product count), **featured products** and **category** exploration, testimonials-style blocks, and CTAs to register or browse products.
 - **Product catalog (`/products`)** — Paginated-style listing with **search**, **category** filter (including quick category chips), and **city** filter; skeleton loading and empty states; each card links to product detail. **Buyers** can **toggle wishlist** (heart) and **add to RFQ cart** from the grid without leaving the page (toasts on actions).
+- **Supplier directory (/suppliers)** — List suppliers with search and trust filters; links to **supplier profile** and products.
 - **Product detail (`/product/:id`)** — Full product info: title, **₹** price and unit, description, **minimum order quantity**, **city**, seller name, **category** with visual treatment; **supplier trust panel** (trust score %, trust level, verified vs unverified badge). **Logged-in buyers** can send a **product inquiry** (quantity stepper + required message). Guests are prompted to log in as a buyer to inquire.
 - **Supplier profile (`/suppliers/:id`)** — Public page: company name, **verified supplier** badge when applicable, location, **trust score / trust level**, activity-style metrics from the profile API, and a **product grid** for that supplier (products loaded from the public list and filtered in the client by seller id).
 
@@ -44,7 +45,7 @@ Below is a practical list of **what is implemented end-to-end** (UI + API unless
 
 - **Company profile (`/profile/company`)** — Create/update seller **company** record (`/api/company`).
 - **My products (`/seller/products`)** — **List** own products; **grid/list** toggle; **create**, **edit**, **delete**; form covers title, description, category, price, unit, MOQ, city; loading skeletons and empty state.
-- **RFQs for you (`/seller/rfqs`)** — RFQs that include the seller’s products; **submit quote** via modal (uses default pricing from products; copy notes that quotes can be revised later — **quote revision** is available on the **API** via `PUT /api/quote/:id`; there is no separate “revise quote” screen in the SPA yet). Links into shared **RFQ detail** for messaging and context.
+- **RFQs for you (/seller/rfqs)** — RFQs that include the seller’s products; **submit** or **revise quote** in the same modal (default pricing from products; PUT /api/quote/:id under the hood). Links into shared **RFQ detail** for messaging and context.
 - **My orders (`/seller/orders`)** — Orders after a buyer accepts a quote; **status progression**: created → **Confirm** → confirmed → **Processing** / **Mark shipped** → shipped → **Mark delivered**; badges reflect state including cancelled/delivered styling where applicable.
 - **Dashboard (`/dashboard`)** — Seller view: **active RFQs** and **orders received** from **`/api/seller/dashboard`** with fallback counts; **inquiries** relevant to the seller surfaced like the buyer dashboard pattern.
 
@@ -57,12 +58,13 @@ Below is a practical list of **what is implemented end-to-end** (UI + API unless
   - **Categories** — List and **create** / **update** / **delete** categories (admin APIs + category endpoints).
   - **RFQs** — Browse RFQs across the platform.
   - **Orders** — Browse orders.
+  - **Moderation** — **Flagged RFQ messages** (e.g. contact-sharing policy).
   - **Activity logs** — Admin action log stream.
 - **Dashboard (`/dashboard`)** — Admin view: **summary** counts and **dashboard** payload for high-level monitoring.
 
 ### Cross-cutting UI & UX
 
-- **Navbar** — Role-aware links (buyer: Wishlist, Cart, RFQs; seller: My Products, RFQs, Orders, Company; admin: Admin Panel); **Dashboard** for all logged-in roles; **notification bell** with **unread count**, hover dropdown of latest items, link to **view all**; **logout**; on the home page, **transparent header** that solidifies on scroll.
+- **Navbar** — Role-aware links (buyer: Wishlist, Cart, RFQs, Suppliers; seller: My Products, RFQs, Orders, Company; admin: Admin Panel); **Dashboard** for all logged-in roles; **notification bell** with **unread count**, hover dropdown of latest items, link to **view all**; **logout**; on the home page, **transparent header** that solidifies on scroll.
 - **Design system** — Shared **Button**, **Card**, **Badge**, **Input**, **Select**, **Table**, **StatCard**, **EmptyState**, **SkeletonCard**, **Toast** provider; **Tailwind** theme with **teal** primary and **coral** CTAs, **Plus Jakarta Sans**, **Lucide** icons, **Framer Motion** on key pages.
 - **Layout** — **`AppShell`** wraps routes with navbar and consistent page container.
 
@@ -138,7 +140,7 @@ For dated or file-level notes, see [`update.md`](update.md).
 ## Repository structure
 
 ```
-SmartB2B/
+B2Bभारत/
 ├── backend/
 │   ├── app/
 │   │   ├── config.py
@@ -355,7 +357,7 @@ Use **`/docs`** for full request/response schemas and newer endpoints (notificat
 
 ## Checklist (current state)
 
-The authoritative narrative list of capabilities is **[What SmartB2B can do today](#what-smartb2b-can-do-today-full-feature-catalog)** above; this checklist is a compact completion matrix.
+The authoritative narrative list of capabilities is in the **What B2Bभारत can do today (full feature catalog)** section above; this checklist is a compact completion matrix.
 
 ### Backend
 
@@ -388,3 +390,62 @@ The authoritative narrative list of capabilities is **[What SmartB2B can do toda
 ## License / contributing
 
 Add a `LICENSE` and contribution guidelines if you open the repo publicly; not included in this template.
+
+---
+
+## Quick start (production-style)
+
+### Release highlights (shipped in this tree)
+- **Supplier directory** — `GET /api/suppliers` and `/suppliers` in the SPA; trust filters and profile links.
+- **RFQ logistics** — Cart and API require **delivery location** and **required-by**; optional priority, notes, and RFQ validity.
+- **Quotes & orders** — Compare quotes, accept (creates order with `paymentStatus`), seller/admin order status, **escrow demo** actions, **print** PO/invoice on order detail.
+- **Governance** — Admin **Moderation** tab lists **flagged RFQ messages** (contact-sharing detection); activity logs and dashboards as before.
+
+
+### Prerequisites
+- **Python 3.11+**
+- **Node 18+**
+- **MongoDB** (local or Atlas URI in `backend/.env`)
+
+### Backend
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+# copy .env.example to .env and set MONGODB_URI / JWT_SECRET
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Database seed (demo users + baseline data)
+```bash
+cd backend
+python scripts/seed.py
+# optional large demo set:
+python scripts/generate_demo_data.py
+```
+
+**Demo logins (after `seed.py`):**
+| Role | Email | Password |
+|------|--------|----------|
+| Admin | `admin@smartb2b.com` | `Admin@123` |
+| Seller | `seller@example.com` | `Seller@123` |
+| Buyer | `buyer@example.com` | `Buyer@123` |
+
+### Frontend
+```bash
+cd frontend
+npm install
+# dev: Vite proxy uses /api — run backend on same machine or set VITE_API_URL
+npm run dev
+# production bundle
+npm run build
+```
+
+### Docker
+Use `docker-compose.yml` at the repo root if you prefer an all-in-one stack; ensure env vars match `backend` settings.
+
+### Smoke test
+- `cd frontend && npm run build && npm run lint`
+- `cd backend && python -c "from app.main import app; print('ok', app.title)"`
+- Log in as buyer → RFQ cart → create RFQ → (seller) quote → (buyer) accept → order → print invoice; admin → panel & logs.

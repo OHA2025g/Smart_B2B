@@ -3,8 +3,8 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.database import get_db
 from app.dependencies import get_current_user, require_roles
-from app.schemas.common import success_response, error_response, serialize_doc
-from app.schemas.rfq import RfqCreate, RfqStatusUpdate, QuoteSubmit
+from app.schemas.common import success_response, error_response, serialize_doc, coerce_object_id, coerce_object_id_list
+from app.schemas.rfq import BuyerCounterOfferCreate, RfqCreate, RfqStatusUpdate, QuoteSubmit
 from app.schemas.message import MessagePost
 from app.services.supplier_score import get_supplier_score_for_response, compute_quote_score
 from app.services.workflow_events import emit_event
@@ -64,9 +64,10 @@ async def _populate_rfq_items(db, items):
 
 
 @router.post("/create-from-cart", status_code=201)
-async def create_from_cart(request: Request, user: dict = Depends(require_roles("buyer"))):
-    """Create RFQ from current cart. Same as POST / with body { fromCart: true }."""
-    return await create(request, RfqCreate(fromCart=True), user)
+async def create_from_cart(request: Request, body: RfqCreate, user: dict = Depends(require_roles("buyer"))):
+    """Create RFQ from current cart. Body is merged with fromCart=true; include delivery, dates, etc."""
+    merged = body.model_copy(update={"fromCart": True})
+    return await create(request, merged, user)
 
 
 @router.post("", status_code=201)
@@ -91,12 +92,62 @@ async def create(request: Request, body: RfqCreate, user: dict = Depends(require
             pid = x["productId"]
             if isinstance(pid, str):
                 pid = ObjectId(pid)
-            items_doc.append({"productId": pid, "quantity": x.get("quantity", 1), "notes": x.get("notes") or ""})
+            qn = int(x.get("quantity", 1) or 0)
+            if qn < 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_response("Each line item quantity must be at least 1.", "VALIDATION_ERROR", path=str(request.url.path)),
+                )
+            items_doc.append({"productId": pid, "quantity": qn, "notes": x.get("notes") or ""})
         else:
+            if int(x.quantity) < 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_response("Each line item quantity must be at least 1.", "VALIDATION_ERROR", path=str(request.url.path)),
+                )
             items_doc.append({"productId": ObjectId(x.productId), "quantity": x.quantity, "notes": x.notes or ""})
     now = datetime.datetime.utcnow()
-    valid_until = now + datetime.timedelta(days=7)
-    doc = {"buyerId": uid, "items": items_doc, "status": "sent", "createdAt": now, "validUntil": valid_until}
+
+    dloc = (body.deliveryLocation or "").strip()
+    if not dloc:
+        raise HTTPException(
+            status_code=400,
+            detail=error_response("deliveryLocation is required.", "VALIDATION_ERROR", path=str(request.url.path)),
+        )
+    rbd = _naive_utc(body.requiredByDate) if body.requiredByDate else None
+    if not rbd:
+        raise HTTPException(
+            status_code=400,
+            detail=error_response("requiredByDate is required.", "VALIDATION_ERROR", path=str(request.url.path)),
+        )
+    if rbd <= now:
+        raise HTTPException(
+            status_code=400,
+            detail=error_response("requiredByDate cannot be in the past.", "VALIDATION_ERROR", path=str(request.url.path)),
+        )
+    if body.validUntil is not None:
+        vu = _naive_utc(body.validUntil)
+        if vu <= now:
+            raise HTTPException(
+                status_code=400,
+                detail=error_response("validUntil must be in the future if provided.", "VALIDATION_ERROR", path=str(request.url.path)),
+            )
+        valid_until = vu
+    else:
+        valid_until = now + datetime.timedelta(days=7)
+    buy_notes = (body.buyerNotes or "").strip() or None
+    pri = body.priority or "normal"
+    doc = {
+        "buyerId": uid,
+        "items": items_doc,
+        "status": "sent",
+        "createdAt": now,
+        "validUntil": valid_until,
+        "deliveryLocation": dloc,
+        "requiredByDate": rbd,
+        "buyerNotes": buy_notes,
+        "priority": pri,
+    }
     r = await db.rfqs.insert_one(doc)
     await emit_event("rfq", r.inserted_id, uid, "buyer", "RFQ_CREATED", "RFQ created", {})
     product_ids = [it.get("productId") for it in items_doc if it.get("productId")]
@@ -159,10 +210,11 @@ async def get_by_id(id: str, request: Request, user: dict = Depends(get_current_
         raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
     items = await _populate_rfq_items(db, rfq.get("items", []))
     buyer = await db.users.find_one({"_id": rfq["buyerId"]}, projection={"name": 1, "email": 1}) if rfq.get("buyerId") else None
-    product_ids = [it.get("productId") for it in rfq.get("items", []) if it.get("productId")]
+    product_ids = coerce_object_id_list([it.get("productId") for it in rfq.get("items", []) if it.get("productId")])
     products = await db.products.find({"_id": {"$in": product_ids}}, projection={"seller": 1}).to_list(None)
     seller_ids = list({str(p["seller"]) for p in products})
-    is_buyer = str(rfq["buyerId"]) == user["id"]
+    buyer_oid = coerce_object_id(rfq.get("buyerId"))
+    is_buyer = buyer_oid is not None and str(buyer_oid) == user["id"]
     is_seller = user["id"] in seller_ids
     is_admin = user.get("role") == "admin"
     if not is_buyer and not is_seller and not is_admin:
@@ -172,6 +224,9 @@ async def get_by_id(id: str, request: Request, user: dict = Depends(get_current_
     if doc:
         doc["items"] = items
         doc["buyerId"] = serialize_doc(buyer) if buyer else None
+        linked = await db.orders.find_one({"rfqId": oid}, sort=[("createdAt", -1)], projection={"_id": 1})
+        if linked:
+            doc["linkedOrderId"] = str(linked["_id"])
     return success_response(data={"rfq": doc})
 
 
@@ -200,16 +255,16 @@ def _naive_utc(dt: datetime.datetime) -> datetime.datetime:
     return dt.replace(tzinfo=None) if getattr(dt, "tzinfo", None) else dt
 
 
-async def _seller_quote_line_items(db, rfq: dict, seller_oid: ObjectId, body_items: list):
+async def _seller_quote_line_items(db, rfq: dict, seller_oid: ObjectId, body_items: list, request_path: str = ""):
     """Build Mongo quote `items` for this seller's RFQ lines. Raises HTTPException on validation failure."""
-    product_ids = [it.get("productId") for it in rfq.get("items", []) if it.get("productId")]
+    product_ids = coerce_object_id_list([it.get("productId") for it in rfq.get("items", []) if it.get("productId")])
     my_products = await db.products.find({"seller": seller_oid, "_id": {"$in": product_ids}}).to_list(None)
     my_pid_set = {p["_id"] for p in my_products}
-    seller_rfq_lines = [it for it in rfq.get("items", []) if it.get("productId") in my_pid_set]
+    seller_rfq_lines = [it for it in rfq.get("items", []) if coerce_object_id(it.get("productId")) in my_pid_set]
     if not seller_rfq_lines:
         raise HTTPException(
             status_code=403,
-            detail=error_response("No items in this RFQ are from you.", "FORBIDDEN", path=str(request.url.path)),
+            detail=error_response("No items in this RFQ are from you.", "FORBIDDEN", path=request_path or ""),
         )
     by_pid = {ObjectId(x.productId): x for x in body_items}
     if set(by_pid.keys()) != my_pid_set:
@@ -218,7 +273,7 @@ async def _seller_quote_line_items(db, rfq: dict, seller_oid: ObjectId, body_ite
             detail=error_response(
                 "Quote items must include exactly one line per product you supply on this RFQ.",
                 "VALIDATION_ERROR",
-                path=str(request.url.path),
+                path=request_path or "",
             ),
         )
     quote_items = []
@@ -265,13 +320,19 @@ async def submit_quote(id: str, request: Request, body: QuoteSubmit, user: dict 
             status_code=400,
             detail=error_response("quote_valid_until must be in the future.", "VALIDATION_ERROR", path=str(request.url.path)),
         )
-    quote_items = await _seller_quote_line_items(db, rfq, seller_oid, body.items)
+    quote_items = await _seller_quote_line_items(db, rfq, seller_oid, body.items, str(request.url.path))
+    q_msg = (body.message or "").strip()
+    q_tnc = (body.termsAndConditions or "").strip() or None
+    q_del = (body.deliveryCommitment or "").strip() or None
+    q_war = (body.warrantyOrSupportNote or "").strip() or None
     quote_doc = {
         "rfqId": oid,
         "sellerId": seller_oid,
         "items": quote_items,
-        "message": (body.message or "").strip(),
-        "termsAndConditions": (body.termsAndConditions or "").strip() or None,
+        "message": q_msg,
+        "termsAndConditions": q_tnc,
+        "deliveryCommitment": q_del,
+        "warrantyOrSupportNote": q_war,
         "status": "submitted",
         "createdAt": now_q,
         "quoteValidUntil": qvu,
@@ -303,10 +364,11 @@ async def get_quotes_by_rfq(id: str, request: Request, user: dict = Depends(get_
     rfq = await db.rfqs.find_one({"_id": oid})
     if not rfq:
         raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
-    product_ids = [it.get("productId") for it in rfq.get("items", []) if it.get("productId")]
+    product_ids = coerce_object_id_list([it.get("productId") for it in rfq.get("items", []) if it.get("productId")])
     products = await db.products.find({"_id": {"$in": product_ids}}, projection={"seller": 1}).to_list(None)
     seller_ids = list({str(p["seller"]) for p in products if p.get("seller")})
-    is_buyer = str(rfq["buyerId"]) == user["id"]
+    buyer_oid = coerce_object_id(rfq.get("buyerId"))
+    is_buyer = buyer_oid is not None and str(buyer_oid) == user["id"]
     is_admin = user.get("role") == "admin"
     is_assigned_seller = user.get("role") == "seller" and user["id"] in seller_ids
     if not is_buyer and not is_admin and not is_assigned_seller:
@@ -431,7 +493,17 @@ async def accept_quote(id: str, quoteId: str, request: Request, user: dict = Dep
     total = sum(it.get("unitPrice", 0) * (it.get("availableQty") or 1) for it in quote.get("items", []))
     order_items = [{"productId": it.get("productId"), "quantity": it.get("availableQty") or 1, "agreedUnitPrice": it.get("unitPrice", 0)} for it in quote.get("items", [])]
     now = datetime.datetime.utcnow()
-    order_doc = {"rfqId": rfq_oid, "quoteId": quote_oid, "buyerId": ObjectId(user["id"]), "sellerId": quote["sellerId"], "items": order_items, "totalAmount": total, "status": "created", "createdAt": now}
+    order_doc = {
+        "rfqId": rfq_oid,
+        "quoteId": quote_oid,
+        "buyerId": ObjectId(user["id"]),
+        "sellerId": quote["sellerId"],
+        "items": order_items,
+        "totalAmount": total,
+        "status": "created",
+        "createdAt": now,
+        "paymentStatus": "payment_pending",
+    }
     r = await db.orders.insert_one(order_doc)
     await db.quotes.update_many({"rfqId": rfq_oid}, {"$set": {"status": "rejected"}})
     await db.quotes.update_one({"_id": quote_oid}, {"$set": {"status": "accepted"}})
@@ -462,6 +534,162 @@ async def accept_quote(id: str, quoteId: str, request: Request, user: dict = Dep
     return success_response(data={"order": doc})
 
 
+
+
+@router.post("/{id}/reject-quote/{quoteId}")
+async def reject_quote(id: str, quoteId: str, request: Request, user: dict = Depends(require_roles("buyer"))):
+    try:
+        rfq_oid = ObjectId(id)
+        quote_oid = ObjectId(quoteId)
+    except Exception:
+        raise HTTPException(status_code=400, detail=error_response("Invalid ID", "VALIDATION_ERROR", path=str(request.url.path)))
+    db = get_db()
+    rfq = await db.rfqs.find_one({"_id": rfq_oid})
+    if not rfq:
+        raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
+    buyer_oid = coerce_object_id(rfq.get("buyerId"))
+    if buyer_oid is None or str(buyer_oid) != user["id"]:
+        raise HTTPException(status_code=403, detail=error_response("Only buyer can reject a quote.", "FORBIDDEN", path=str(request.url.path)))
+    if rfq.get("status") == "accepted":
+        raise HTTPException(status_code=400, detail=error_response("RFQ already has an accepted quote.", "VALIDATION_ERROR", path=str(request.url.path)))
+    quote = await db.quotes.find_one({"_id": quote_oid})
+    if not quote or str(quote.get("rfqId")) != id:
+        raise HTTPException(status_code=404, detail=error_response("Quote not found.", "NOT_FOUND", path=str(request.url.path)))
+    if quote.get("status") in ("accepted", "rejected"):
+        raise HTTPException(status_code=400, detail=error_response("Quote is already final.", "VALIDATION_ERROR", path=str(request.url.path)))
+    await db.quotes.update_one({"_id": quote_oid}, {"$set": {"status": "rejected"}})
+    await emit_event("rfq", rfq_oid, ObjectId(user["id"]), "buyer", "QUOTE_REJECTED", "Quote rejected", {"quoteId": str(quote_oid)})
+    return success_response(data={"ok": True, "quoteId": str(quote_oid), "status": "rejected"})
+
+
+@router.get("/{id}/counter-offers")
+async def get_counter_offers(id: str, request: Request, user: dict = Depends(get_current_user)):
+    try:
+        oid = ObjectId(id)
+    except Exception:
+        raise HTTPException(
+            status_code=400, detail=error_response("Invalid RFQ ID", "VALIDATION_ERROR", path=str(request.url.path))
+        )
+    db = get_db()
+    rfq = await db.rfqs.find_one({"_id": oid})
+    if not rfq:
+        raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
+    product_ids = coerce_object_id_list([it.get("productId") for it in rfq.get("items", []) if it.get("productId")])
+    products = await db.products.find({"_id": {"$in": product_ids}}, projection={"seller": 1}).to_list(None)
+    seller_ids = list({str(p["seller"]) for p in products})
+    buyer_oid = coerce_object_id(rfq.get("buyerId"))
+    is_buyer = buyer_oid is not None and str(buyer_oid) == user["id"]
+    is_seller = user["id"] in seller_ids
+    is_admin = user.get("role") == "admin"
+    if not is_buyer and not is_seller and not is_admin:
+        raise HTTPException(status_code=403, detail=error_response("Access denied.", "FORBIDDEN", path=str(request.url.path)))
+    out: list[dict] = []
+    col = db["buyer_counter_offers"]
+    async for doc in col.find({"rfqId": oid}).sort("createdAt", -1):
+        if is_seller and not is_buyer and not is_admin:
+            q = await db.quotes.find_one({"_id": doc.get("quoteId")}, projection={"sellerId": 1})
+            if not q or str(q.get("sellerId")) != user["id"]:
+                continue
+        buyer_u = None
+        if doc.get("buyerId"):
+            buyer_u = await db.users.find_one(
+                {"_id": doc["buyerId"]},
+                projection={"name": 1, "email": 1},
+            )
+        d = serialize_doc(doc)
+        if d:
+            d["buyerId"] = serialize_doc(buyer_u) if buyer_u else None
+        out.append(d)
+    return success_response(data={"counterOffers": out})
+
+
+@router.post("/{id}/counter-offer", status_code=201)
+async def post_counter_offer(
+    id: str,
+    request: Request,
+    body: BuyerCounterOfferCreate,
+    user: dict = Depends(require_roles("buyer")),
+):
+    try:
+        rfq_oid = ObjectId(id)
+        quote_oid = ObjectId(body.quoteId)
+    except Exception:
+        raise HTTPException(
+            status_code=400, detail=error_response("Invalid ID", "VALIDATION_ERROR", path=str(request.url.path))
+        )
+    msg = body.message.strip()
+    if not msg:
+        raise HTTPException(
+            status_code=400, detail=error_response("message is required.", "VALIDATION_ERROR", path=str(request.url.path))
+        )
+    db = get_db()
+    rfq = await db.rfqs.find_one({"_id": rfq_oid})
+    if not rfq:
+        raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
+    if str(rfq.get("buyerId")) != user["id"]:
+        raise HTTPException(
+            status_code=403, detail=error_response("Only the buyer can send a counter-offer.", "FORBIDDEN", path=str(request.url.path))
+        )
+    if rfq.get("status") in ("accepted", "rejected", "closed"):
+        raise HTTPException(
+            status_code=400,
+            detail=error_response("This RFQ is not open for negotiation.", "VALIDATION_ERROR", path=str(request.url.path)),
+        )
+    quote = await db.quotes.find_one({"_id": quote_oid})
+    if not quote or str(quote.get("rfqId")) != id:
+        raise HTTPException(status_code=404, detail=error_response("Quote not found.", "NOT_FOUND", path=str(request.url.path)))
+    if quote.get("status") in ("accepted", "rejected"):
+        raise HTTPException(
+            status_code=400, detail=error_response("This quote is already final.", "VALIDATION_ERROR", path=str(request.url.path))
+        )
+    now = datetime.datetime.utcnow()
+    qvu = compute_quote_valid_until(quote.get("createdAt"), quote.get("quoteValidUntil"))
+    if quote_is_expired(now, qvu, quote.get("status")):
+        raise HTTPException(
+            status_code=400,
+            detail=error_response(
+                "This quote is past its validity date. The supplier can submit a new revision.",
+                "VALIDATION_ERROR",
+                path=str(request.url.path),
+            ),
+        )
+    doc = {
+        "rfqId": rfq_oid,
+        "quoteId": quote_oid,
+        "buyerId": ObjectId(user["id"]),
+        "message": msg[:5000],
+        "proposedTotal": body.proposedTotal,
+        "createdAt": now,
+    }
+    r = await db["buyer_counter_offers"].insert_one(doc)
+    ins = await db["buyer_counter_offers"].find_one({"_id": r.inserted_id})
+    seller_id = quote.get("sellerId")
+    if seller_id:
+        preview = (msg[:180] + "…") if len(msg) > 180 else msg
+        await create_notification(
+            seller_id,
+            "Buyer counter-offer",
+            f"The buyer sent a counter-offer: {preview}",
+            "buyer_counter",
+            "rfq",
+            str(rfq_oid),
+        )
+    await emit_event(
+        "rfq",
+        rfq_oid,
+        ObjectId(user["id"]),
+        "buyer",
+        "BUYER_COUNTER_OFFER",
+        "Buyer sent a counter-offer",
+        {"quoteId": str(quote_oid)},
+    )
+    buyer_u = await db.users.find_one({"_id": ObjectId(user["id"])}, projection={"name": 1, "email": 1})
+    d = serialize_doc(ins) if ins else None
+    if d:
+        d["buyerId"] = serialize_doc(buyer_u) if buyer_u else None
+    return success_response(data={"counterOffer": d})
+
+
 @router.get("/{id}/messages")
 async def rfq_messages_get(id: str, user: dict = Depends(get_current_user)):
     """Alias of GET /api/messages/{rfqId} for /api/rfqs/{id}/messages."""
@@ -471,7 +699,7 @@ async def rfq_messages_get(id: str, user: dict = Depends(get_current_user)):
 @router.post("/{id}/messages", status_code=201)
 async def rfq_messages_post(id: str, body: MessagePost, user: dict = Depends(get_current_user)):
     """Alias of POST /api/messages/{rfqId}."""
-    return await message_thread.post_message_response(id, body.text, user)
+    return await message_thread.post_message_response(id, user, body.text, confirm_send=bool(body.confirm_send))
 
 
 @router.get("/{id}/timeline")
@@ -484,10 +712,11 @@ async def get_rfq_timeline(id: str, request: Request, user: dict = Depends(get_c
     rfq = await db.rfqs.find_one({"_id": oid})
     if not rfq:
         raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
-    product_ids = [it.get("productId") for it in rfq.get("items", []) if it.get("productId")]
+    product_ids = coerce_object_id_list([it.get("productId") for it in rfq.get("items", []) if it.get("productId")])
     products = await db.products.find({"_id": {"$in": product_ids}}, projection={"seller": 1}).to_list(None)
     seller_ids = list({str(p["seller"]) for p in products})
-    is_buyer = str(rfq["buyerId"]) == user["id"]
+    buyer_oid = coerce_object_id(rfq.get("buyerId"))
+    is_buyer = buyer_oid is not None and str(buyer_oid) == user["id"]
     is_seller = user["id"] in seller_ids
     is_admin = user.get("role") == "admin"
     if not is_buyer and not is_seller and not is_admin:

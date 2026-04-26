@@ -46,11 +46,20 @@ async def update_quote(id: str, request: Request, body: QuoteUpdate, user: dict 
         rfq = await db.rfqs.find_one({"_id": quote["rfqId"]})
         if not rfq:
             raise HTTPException(status_code=404, detail=error_response("RFQ not found.", "NOT_FOUND", path=str(request.url.path)))
-        payload["items"] = await _seller_quote_line_items(db, rfq, ObjectId(user["id"]), body.items)
+        payload["items"] = await _seller_quote_line_items(
+            db, rfq, ObjectId(user["id"]), body.items, str(request.url.path)
+        )
     if body.message is not None:
         payload["message"] = body.message
     if body.commitment_note is not None:
         payload["commitmentNote"] = body.commitment_note
+    if body.deliveryCommitment is not None:
+        d = (body.deliveryCommitment or "").strip() or None
+        payload["deliveryCommitment"] = d
+        if body.commitment_note is None:
+            payload["commitmentNote"] = d
+    if body.warrantyOrSupportNote is not None:
+        payload["warrantyOrSupportNote"] = (body.warrantyOrSupportNote or "").strip() or None
     if body.termsAndConditions is not None:
         payload["termsAndConditions"] = (body.termsAndConditions or "").strip() or None
     if body.quoteValidUntil is not None:
@@ -68,6 +77,7 @@ async def update_quote(id: str, request: Request, body: QuoteUpdate, user: dict 
             detail=error_response("No changes supplied.", "VALIDATION_ERROR", path=str(request.url.path)),
         )
     payload["status"] = "revised"
+    payload["updatedAt"] = datetime.datetime.utcnow()
     await db.quotes.update_one({"_id": oid}, {"$set": payload})
     updated = await db.quotes.find_one({"_id": oid})
     rfq_oid = updated.get("rfqId")

@@ -13,4 +13,9 @@ async def get_thread(rfqId: str, user: dict = Depends(get_current_user)):
 
 @router.post("/{rfqId}", status_code=201)
 async def post_message(rfqId: str, body: MessagePost, user: dict = Depends(get_current_user)):
-    return await message_thread.post_message_response(rfqId, body.text, user)
+    return await message_thread.post_message_response(
+        rfqId,
+        user,
+        body.text,
+        confirm_send=bool(body.confirm_send),
+    )

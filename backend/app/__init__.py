@@ -1,1 +1,1 @@
-# SmartB2B Backend (Python/FastAPI)
+# B2Bभारत Backend (Python/FastAPI)

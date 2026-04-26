@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.database import get_db
 from app.dependencies import get_current_user, hash_password, verify_password, create_access_token
-from app.schemas.common import success_response, error_response
+from app.schemas.common import success_response, error_response, serialize_doc
 from app.schemas.auth import RegisterBody, LoginBody
 
 router = APIRouter()
@@ -43,4 +43,4 @@ async def login(request: Request, body: LoginBody):
 
 @router.get("/me")
 async def me(request: Request, user: dict = Depends(get_current_user)):
-    return success_response(data={"user": user})
+    return success_response(data={"user": serialize_doc(user)})

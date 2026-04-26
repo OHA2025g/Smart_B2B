@@ -33,6 +33,10 @@ async def list_products(
     trust_level: str | None = Query(None, description="Filter by supplier trust level label"),
     min_price: float | None = Query(None),
     max_price: float | None = Query(None),
+    sort: str = Query(
+        "newest",
+        description="newest, relevance, price_asc, price_desc, trust",
+    ),
 ):
     db = get_db()
     filter_q: dict = {"isActive": True}
@@ -64,6 +68,18 @@ async def list_products(
                 if trust_level.lower() not in tl.lower():
                     continue
         products.append(doc)
+    s = (sort or "newest").lower()
+    if s == "price_asc":
+        products.sort(key=lambda d: float(d.get("price") or 0))
+    elif s == "price_desc":
+        products.sort(key=lambda d: float(d.get("price") or 0), reverse=True)
+    elif s in ("trust", "trust_desc", "trust_score"):
+        products.sort(
+            key=lambda d: (d.get("seller") or {}).get("trustScore", 0) or 0,
+            reverse=True,
+        )
+    elif s == "relevance":
+        pass
     return success_response(data={"products": products})
 
 

@@ -152,7 +152,8 @@ export default function SellerRFQs() {
       if (!(dd > 0)) err[`del_${pid}`] = 'Delivery days must be greater than 0.';
     }
     setFieldErrors(err);
-    return Object.keys(err).length === 0;
+    const ok = Object.keys(err).length === 0;
+    return { ok, err };
   };
 
   const buildPayload = () => {
@@ -178,8 +179,11 @@ export default function SellerRFQs() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!modalRfq || !validate()) {
-      toast.add('Please fix the highlighted fields.', 'error');
+    if (!modalRfq) return;
+    const { ok, err } = validate();
+    if (!ok) {
+      const msgs = Object.values(err).filter(Boolean);
+      toast.add(msgs.length ? msgs.join(' · ') : 'Please fix the highlighted fields.', 'error');
       return;
     }
     setSubmitting(true);
@@ -227,7 +231,36 @@ export default function SellerRFQs() {
       <div>
         <h1 className="text-2xl font-bold mb-6 text-slate-900">RFQs for you</h1>
         <Card>
-          <EmptyState icon={FileText} title="No RFQs assigned" description="RFQs containing your products will appear here." />
+          <EmptyState
+            icon={FileText}
+            title="No RFQs for your listings"
+            description={
+              <>
+                <p>
+                  B2Bभारत only lists an RFQ for you if a buyer included <strong>one of your product listings</strong> when
+                  they created the request. The system matches by the exact <strong>product ID</strong> in the database — not
+                  the title, SKU, or category.
+                </p>
+                <p>
+                  If a buyer (for example) created an RFQ before you had published your catalog, that RFQ still references
+                  <strong>other</strong> product IDs. Creating new items with similar names later does <strong>not</strong> link
+                  you to that existing RFQ.
+                </p>
+                <p className="font-medium text-slate-700">
+                  To receive that flow: have the buyer create a <strong>new</strong> RFQ and add your current listings, or
+                  publish your products first, then have buyers build RFQs from the catalog.
+                </p>
+              </>
+            }
+            action={
+              <Link
+                to="/seller/products"
+                className="inline-flex items-center justify-center rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
+              >
+                Go to my products
+              </Link>
+            }
+          />
         </Card>
       </div>
     );

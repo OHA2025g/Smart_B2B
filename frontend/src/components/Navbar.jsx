@@ -71,11 +71,12 @@ export function Navbar() {
           <Link to="/" className="flex items-center gap-2 font-bold text-xl transition-opacity hover:opacity-90">
             <ShoppingBag className={`h-7 w-7 shrink-0 ${transparent ? 'text-teal-400' : 'text-teal-600'}`} />
             <span className={transparent ? 'bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent' : 'bg-gradient-to-r from-teal-600 to-teal-700 bg-clip-text text-transparent'}>
-              SmartB2B
+              B2Bभारत
             </span>
           </Link>
           <nav className="flex items-center gap-4 sm:gap-6">
             <NavLink to="/products">Products</NavLink>
+            <NavLink to="/suppliers">Suppliers</NavLink>
             {user ? (
               <>
                 {user.role === 'buyer' && (

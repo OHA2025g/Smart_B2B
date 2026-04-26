@@ -108,23 +108,28 @@ async def dashboard(request: Request, user: dict = Depends(get_current_user)):
 @router.get("/users")
 async def get_users(request: Request, user: dict = Depends(get_current_user)):
     db = get_db()
-    cursor = db.users.find({}, projection={"password": 0}).sort("createdAt", -1)
+    cursor = db.users.find({"role": "buyer"}, projection={"password": 0}).sort("createdAt", -1)
     users = [serialize_doc(u) async for u in cursor]
-    for u in users:
-        if u.get("role") != "seller":
-            continue
-        raw_id = u.get("_id") or u.get("id")
-        if not raw_id:
-            continue
-        try:
-            seller_oid = ObjectId(str(raw_id))
-            score = await get_supplier_score_for_response(seller_oid)
-            if score:
-                u["trustScore"] = score.get("total_score", 0)
-                u["trustLevel"] = score.get("trust_level", "Low Trust")
-        except Exception:
-            pass
     return success_response(data={"users": users})
+
+
+@router.get("/user-profile/{user_id}")
+async def admin_user_profile(user_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Full user + company profile for admin (buyer or seller)."""
+    try:
+        oid = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail=error_response("Invalid user ID", "VALIDATION_ERROR", path=str(request.url.path)))
+    db = get_db()
+    target = await db.users.find_one({"_id": oid}, projection={"password": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail=error_response("User not found.", "NOT_FOUND", path=str(request.url.path)))
+    company = await db.companyprofiles.find_one({"user": oid})
+    out: dict = {"user": serialize_doc(target), "company": serialize_doc(company) if company else None}
+    if target.get("role") == "seller":
+        sc = await get_supplier_score_for_response(oid)
+        out["score"] = sc
+    return success_response(data=out)
 
 
 @router.put("/users/{id}/ban")
@@ -179,11 +184,16 @@ async def verify_supplier(id: str, request: Request, body: VerifySupplierBody, u
     await db.users.update_one({"_id": oid}, {"$set": {"isVerifiedSupplier": verified}})
     await recalculate_supplier_score(oid)
     target = await db.users.find_one({"_id": oid}, projection={"password": 0})
+    score = await get_supplier_score_for_response(oid)
     await admin_log(ObjectId(user["id"]), "VERIFY_SUPPLIER", id, {"verified": verified, "email": target.get("email")})
     await emit_event("user", oid, ObjectId(user["id"]), "admin", "SUPPLIER_VERIFIED" if verified else "SUPPLIER_UNVERIFIED", "Supplier verified" if verified else "Supplier unverified", {"verified": verified})
     if verified:
         await create_notification(oid, "Supplier verified", "Your account has been verified as a supplier.", "supplier_verified", "user", id)
-    return success_response(data={"user": serialize_doc(target)})
+    else:
+        await create_notification(
+            oid, "Supplier verification removed", "Your supplier verification has been updated by an administrator.", "supplier_unverified", "user", id
+        )
+    return success_response(data={"user": serialize_doc(target), "score": score})
 
 
 @router.post("/suppliers/{seller_id}/verify")
@@ -199,10 +209,11 @@ async def admin_verify_supplier(seller_id: str, request: Request, user: dict = D
     await db.users.update_one({"_id": oid}, {"$set": {"isVerifiedSupplier": True}})
     await recalculate_supplier_score(oid)
     target = await db.users.find_one({"_id": oid}, projection={"password": 0})
+    score = await get_supplier_score_for_response(oid)
     await admin_log(ObjectId(user["id"]), "VERIFY_SUPPLIER", seller_id, {"email": target.get("email")})
     await emit_event("user", oid, ObjectId(user["id"]), "admin", "SUPPLIER_VERIFIED", "Supplier verified", {})
     await create_notification(oid, "Supplier verified", "Your account has been verified as a supplier.", "supplier_verified", "user", seller_id)
-    return success_response(data={"user": serialize_doc(target)})
+    return success_response(data={"user": serialize_doc(target), "score": score})
 
 
 @router.get("/suppliers")
@@ -222,10 +233,19 @@ async def get_suppliers(request: Request, user: dict = Depends(get_current_user)
                         doc["trustLevel"] = score.get("trust_level", "Low Trust")
                 except Exception:
                     pass
-                profile = await db.companyprofiles.find_one({"user": ObjectId(str(raw_id))}, projection={"companyName": 1, "city": 1})
+                profile = await db.companyprofiles.find_one(
+                    {"user": ObjectId(str(raw_id))},
+                    projection={"companyName": 1, "city": 1, "state": 1, "country": 1, "phone": 1, "gstNumber": 1, "description": 1, "website": 1},
+                )
                 if profile:
                     doc["companyName"] = profile.get("companyName")
                     doc["city"] = profile.get("city")
+                    doc["state"] = profile.get("state")
+                    doc["country"] = profile.get("country")
+                    doc["phone"] = profile.get("phone")
+                    doc["gstNumber"] = profile.get("gstNumber")
+                    doc["description"] = profile.get("description")
+                    doc["website"] = profile.get("website")
         suppliers.append(doc)
     return success_response(data={"suppliers": suppliers})
 
@@ -243,9 +263,13 @@ async def admin_unverify_supplier(seller_id: str, request: Request, user: dict =
     await db.users.update_one({"_id": oid}, {"$set": {"isVerifiedSupplier": False}})
     await recalculate_supplier_score(oid)
     target = await db.users.find_one({"_id": oid}, projection={"password": 0})
+    score = await get_supplier_score_for_response(oid)
     await admin_log(ObjectId(user["id"]), "UNVERIFY_SUPPLIER", seller_id, {"email": target.get("email")})
     await emit_event("user", oid, ObjectId(user["id"]), "admin", "SUPPLIER_UNVERIFIED", "Supplier unverified", {})
-    return success_response(data={"user": serialize_doc(target)})
+    await create_notification(
+        oid, "Supplier verification removed", "Your supplier verification has been removed. Your trust score was recalculated.", "supplier_unverified", "user", seller_id
+    )
+    return success_response(data={"user": serialize_doc(target), "score": score})
 
 
 @router.post("/suppliers/{seller_id}/recalculate-score")
@@ -414,3 +438,64 @@ async def analytics_order_trends(request: Request, user: dict = Depends(get_curr
     ]
     series = [{"month": d["_id"], "count": d["count"]} async for d in db.orders.aggregate(pipeline) if d.get("_id")]
     return success_response(data={"orderTrends": series})
+
+
+
+
+@router.get("/moderation/messages")
+async def admin_moderation_messages(request: Request, user: dict = Depends(get_current_user)):
+    """Flagged / moderated RFQ chat messages with raw + display text for review."""
+    db = get_db()
+    out = []
+    async for th in db.messagethreads.find({}):
+        rfq_id = str(th.get("rfqId", ""))
+        for m in th.get("messages", []) or []:
+            if not (m.get("moderationFlag") or m.get("containsContactAttempt") or m.get("moderationScore", 0) >= 45):
+                continue
+            mid = str(m.get("_id", ""))
+            sid = m.get("senderId")
+            sender = None
+            if isinstance(sid, ObjectId):
+                sender = await db.users.find_one({"_id": sid}, projection={"name": 1, "email": 1, "role": 1})
+            row = {
+                "messageId": mid,
+                "rfqId": rfq_id,
+                "sender": serialize_doc(sender) if sender else None,
+                "senderRole": m.get("senderRole"),
+                "rawMessage": m.get("rawMessage") or m.get("text"),
+                "displayMessage": m.get("displayMessage") or m.get("text"),
+                "moderationScore": m.get("moderationScore", 0),
+                "moderationReasons": m.get("moderationReasons") or ([m.get("moderationReason")] if m.get("moderationReason") else []),
+                "moderationStatus": m.get("moderationStatus"),
+                "detectedTypes": m.get("detectedTypes", []),
+                "createdAt": m.get("createdAt"),
+            }
+            out.append(row)
+    out.sort(key=lambda x: str(x.get("createdAt") or ""), reverse=True)
+    return success_response(data={"messages": out[:500], "count": len(out[:500])})
+
+
+@router.get("/flagged-messages")
+async def admin_flagged_messages(request: Request, user: dict = Depends(get_current_user)):
+    """Messages with moderation flag (off-platform / contact attempt)."""
+    db = get_db()
+    out = []
+    async for t in db.messagethreads.find({}):
+        rfq_id = t.get("rfqId")
+        for m in t.get("messages", []):
+            if m.get("moderationFlag") or m.get("containsContactAttempt"):
+                out.append(
+                    {
+                        "threadId": str(t.get("_id")),
+                        "rfqId": str(rfq_id) if rfq_id else None,
+                        "messageId": str(m.get("_id") or m.get("id", "")),
+                        "senderId": str(m.get("senderId", "")) if m.get("senderId") is not None else None,
+                        "senderRole": m.get("senderRole"),
+                        "text": m.get("text"),
+                        "createdAt": m.get("createdAt").isoformat() if getattr(m.get("createdAt"), "isoformat", None) else None,
+                        "moderationFlag": bool(m.get("moderationFlag")),
+                        "moderationReason": m.get("moderationReason"),
+                    }
+                )
+    out.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+    return success_response(data={"flagged": out[:500], "count": len(out[:500])})

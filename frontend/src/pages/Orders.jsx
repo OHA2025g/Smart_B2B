@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { formatDateTimeIst } from '../lib/istTime';
 import { motion } from 'framer-motion';
 import { Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -156,7 +157,7 @@ export default function Orders() {
                       )}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {o.createdAt ? new Date(o.createdAt).toLocaleString() : '—'}
+                      {o.createdAt ? formatDateTimeIst(o.createdAt) : '—'}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">

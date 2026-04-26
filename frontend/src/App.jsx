@@ -16,6 +16,7 @@ import RFQDetail from './pages/RFQDetail';
 import AdminPanel from './pages/AdminPanel';
 import Home from './pages/Home';
 import SupplierProfile from './pages/SupplierProfile';
+import Suppliers from './pages/Suppliers';
 import Notifications from './pages/Notifications';
 import OrderDetail from './pages/OrderDetail';
 import Orders from './pages/Orders';
@@ -29,12 +30,15 @@ function App() {
         <Route path="register" element={<Register />} />
         <Route path="products" element={<Products />} />
         <Route path="product/:id" element={<ProductDetail />} />
+        <Route path="suppliers" element={<Suppliers />} />
         <Route path="suppliers/:id" element={<SupplierProfile />} />
         <Route path="notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="wishlist" element={<ProtectedRoute allowedRoles={['buyer']}><Wishlist /></ProtectedRoute>} />
         <Route path="cart" element={<ProtectedRoute allowedRoles={['buyer']}><Cart /></ProtectedRoute>} />
         <Route path="rfq" element={<ProtectedRoute allowedRoles={['buyer']}><RFQList /></ProtectedRoute>} />
+        <Route path="rfqs" element={<ProtectedRoute allowedRoles={['buyer']}><RFQList /></ProtectedRoute>} />
         <Route path="rfq/:id" element={<ProtectedRoute><RFQDetail /></ProtectedRoute>} />
+        <Route path="rfqs/:id" element={<ProtectedRoute><RFQDetail /></ProtectedRoute>} />
         <Route
           path="orders"
           element={

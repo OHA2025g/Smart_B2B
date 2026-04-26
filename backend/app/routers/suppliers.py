@@ -1,10 +1,83 @@
+import re
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 from app.database import get_db
 from app.schemas.common import success_response, error_response, serialize_doc
-from app.services.supplier_score import get_supplier_score_for_response, recalculate_supplier_score
+from app.services.supplier_score import TRUST_WEIGHTS, get_supplier_score_for_response
 
 router = APIRouter()
+
+
+@router.get("")
+async def list_suppliers(
+    request: Request,
+    search: str | None = Query(None, description="Company or seller name / email"),
+    city: str | None = Query(None),
+    category: str | None = Query(None, description="Match if supplier has a product in this category"),
+    verified_only: bool | None = Query(None),
+    trust_level: str | None = Query(None),
+    sort: str = Query("trust", description="trust, orders, products, name"),
+    limit: int = Query(50, le=200, ge=1),
+    skip: int = Query(0, ge=0),
+):
+    """Public + auth: discover suppliers (sellers) with trust metadata."""
+    db = get_db()
+    q = {"role": "seller"}
+    if verified_only is True:
+        q["isVerifiedSupplier"] = True
+    cursor = db.users.find(q, {"password": 0}).sort("name", 1)
+    rows = []
+    async for seller in cursor:
+        oid = seller["_id"]
+        prof = await db.companyprofiles.find_one({"user": oid})
+        cname = (prof or {}).get("companyName") or seller.get("name") or ""
+        em = (seller.get("email") or "").lower()
+        c = ((prof or {}).get("city") or "").lower()
+        if search:
+            s = search.lower()
+            if s not in cname.lower() and s not in em and s not in (seller.get("name") or "").lower():
+                continue
+        if city and city.lower() not in c:
+            continue
+        if category:
+            has = await db.products.find_one(
+                {"seller": oid, "isActive": True, "category": re.compile(re.escape(category), re.I)}
+            )
+            if not has:
+                continue
+        score_data = await get_supplier_score_for_response(oid) or {}
+        ts = int(score_data.get("total_score", 0) or 0)
+        tl = str(score_data.get("trust_level", "Low Trust") or "")
+        if trust_level and trust_level.lower() not in tl.lower():
+            continue
+        n_products = await db.products.count_documents({"seller": oid, "isActive": True})
+        n_orders = await db.orders.count_documents({"seller": oid})
+        rows.append(
+            {
+                "sellerId": str(oid),
+                "name": seller.get("name"),
+                "email": seller.get("email"),
+                "companyName": cname,
+                "city": (prof or {}).get("city") or "",
+                "verified": bool(seller.get("isVerifiedSupplier")),
+                "trustScore": ts,
+                "trustLevel": tl,
+                "productCount": n_products,
+                "orderCount": n_orders,
+            }
+        )
+    key_map = {
+        "trust": lambda r: -r["trustScore"],
+        "orders": lambda r: -r["orderCount"],
+        "products": lambda r: -r["productCount"],
+        "name": lambda r: (r.get("companyName") or r.get("name") or "").lower(),
+    }
+    sk = key_map.get(sort, key_map["trust"])
+    rows.sort(key=sk)
+    page = rows[skip : skip + limit]
+    return success_response(
+        data={"suppliers": page, "total": len(rows), "returned": len(page)}
+    )
 
 
 @router.get("/{seller_id}/score")
@@ -42,11 +115,10 @@ async def get_supplier_profile(seller_id: str, request: Request):
     quotes_submitted = await db.quotes.count_documents({"sellerId": oid})
     quotes_accepted = await db.quotes.count_documents({"sellerId": oid, "status": "accepted"})
     orders_fulfilled = await db.orders.count_documents({"sellerId": oid})
-    response_rate = (min(100, (quotes_submitted / rfqs_received) * 100)) if rfqs_received else 0
+    operational_response_rate = (min(100, (quotes_submitted / rfqs_received) * 100)) if rfqs_received else 0.0
     quote_acceptance_rate = round((quotes_accepted / quotes_submitted) * 100, 1) if quotes_submitted else 0.0
     categories_served = await db.products.distinct("category", {"seller": oid, "isActive": True})
     city = (profile or {}).get("city") or ""
-    # average_rating: derived from supplier score buyer_rating component (0–100) → 1–5 for display (no separate review collection).
     br = float((score_data or {}).get("buyer_rating", 70) or 70)
     average_rating = round(min(5.0, max(1.0, br / 20.0)), 2)
     quotes_with_dates = await db.quotes.find({"sellerId": oid}, projection={"rfqId": 1, "createdAt": 1}).to_list(100)
@@ -57,6 +129,13 @@ async def get_supplier_profile(seller_id: str, request: Request):
             delta = (q["createdAt"] - rfq_row["createdAt"]).total_seconds() / 3600
             response_times.append(delta)
     avg_response_hours = round(sum(response_times) / len(response_times), 1) if response_times else None
+    # Delivery: average of quoted delivery days
+    deliv_samples = []
+    async for qu in db.quotes.find({"sellerId": oid}, {"items": 1}).limit(200):
+        for it in qu.get("items") or []:
+            if it.get("deliveryDays"):
+                deliv_samples.append(float(it["deliveryDays"]))
+    avg_delivery_days = round(sum(deliv_samples) / len(deliv_samples), 1) if deliv_samples else None
     recent_products = []
     async for p in db.products.find({"seller": oid, "isActive": True}).sort("createdAt", -1).limit(8):
         recent_products.append(serialize_doc(p))
@@ -75,7 +154,17 @@ async def get_supplier_profile(seller_id: str, request: Request):
             "verified_supplier": bool(seller.get("isVerifiedSupplier")),
             "trust_score": (score_data or {}).get("total_score", 0),
             "trust_level": (score_data or {}).get("trust_level", "Low Trust"),
-            "response_rate": round(response_rate, 1),
+            "score_breakdown": {
+                "profile_completeness": (score_data or {}).get("profile_completeness", 0),
+                "response_rate": (score_data or {}).get("response_rate", 0),
+                "product_strength": (score_data or {}).get("product_strength", 0),
+                "buyer_rating": (score_data or {}).get("buyer_rating", 0),
+                "verified_status": (score_data or {}).get("verified_status", 0),
+                "weights": (score_data or {}).get("weights") or TRUST_WEIGHTS,
+            },
+            "trust_score_updated_at": (score_data or {}).get("updated_at"),
+            "response_rate": round(operational_response_rate, 1),
+            "operational_response_rate": round(operational_response_rate, 1),
             "average_response_time_hours": avg_response_hours,
             "total_products": total_products_active,
             "active_products": total_products_active,
@@ -88,6 +177,7 @@ async def get_supplier_profile(seller_id: str, request: Request):
             "orders_fulfilled": orders_fulfilled,
             "total_orders_fulfilled": orders_fulfilled,
             "average_rating": average_rating,
+            "average_delivery_days": avg_delivery_days,
             "city": city,
             "categories_served": categories_served,
             "recent_products": recent_products,

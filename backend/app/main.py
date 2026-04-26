@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="SmartB2B API",
+    title="B2Bभारत API",
     version="1.0.0",
     lifespan=lifespan,
 )

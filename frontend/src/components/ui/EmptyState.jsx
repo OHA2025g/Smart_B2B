@@ -14,7 +14,11 @@ export function EmptyState({ icon: Icon, title, description, action, className =
         </div>
       )}
       <h3 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h3>
-      {description && <p className="mt-2 text-sm text-slate-500 max-w-md leading-relaxed">{description}</p>}
+      {description && (
+        <div className="mt-2 text-sm text-slate-500 max-w-md leading-relaxed w-full [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:text-left space-y-2">
+          {description}
+        </div>
+      )}
       {action && <div className="mt-5">{action}</div>}
     </motion.div>
   );
