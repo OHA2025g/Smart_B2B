@@ -1,6 +1,6 @@
-import { motion } from 'framer-motion';
+﻿import { motion } from 'framer-motion';
 
-export function StatCard({ title, value, icon: Icon, trend, className = '' }) {
+export function StatCard({ title, value, icon: Icon, trend, className = '', valueTitle, valueClassName = '' }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -8,12 +8,18 @@ export function StatCard({ title, value, icon: Icon, trend, className = '' }) {
       className={`bg-white rounded-2xl border border-slate-200/90 p-5 shadow-md shadow-slate-200/40 ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">{value}</p>
+          <p
+            className={`mt-2 font-bold tracking-tight text-slate-900 tabular-nums break-words ${valueClassName || 'text-2xl'}`}
+            title={valueTitle || undefined}
+          >
+            {value}
+          </p>
           {trend != null && (
             <p className={`mt-1 text-xs ${trend >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-              {trend >= 0 ? '+' : ''}{trend}% from last period
+              {trend >= 0 ? '+' : ''}
+              {trend}% from last period
             </p>
           )}
         </div>

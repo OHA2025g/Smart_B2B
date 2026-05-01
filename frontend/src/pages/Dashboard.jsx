@@ -29,6 +29,24 @@ const ORDER_STATUS_PIPELINE = ['created', 'confirmed', 'processing', 'shipped', 
 
 const RFQ_STATUS_PIPELINE = ['sent', 'quoted', 'accepted', 'closed'];
 
+
+/** Compact INR for tiles; native tooltip shows full rupees. */
+function formatInrAbbrev(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return '—';
+  const sign = x < 0 ? '-' : '';
+  const v = Math.abs(x);
+  if (v >= 1e7) return `${sign}₹${(v / 1e7).toFixed(2)} Cr`;
+  if (v >= 1e5) return `${sign}₹${(v / 1e5).toFixed(2)} L`;
+  return `${sign}₹${Math.round(v).toLocaleString('en-IN')}`;
+}
+
+function inrFullTitle(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return undefined;
+  return `₹${x.toLocaleString('en-IN', { maximumFractionDigits: 2 })} (exact)`;
+}
+
 function distToPieData(dist, pipelineOrder = null) {
   if (!dist || typeof dist !== 'object') return [];
   let entries = Object.entries(dist);
@@ -244,12 +262,16 @@ export default function Dashboard() {
               <>
                 <StatCard
                   title="Sub revenue (demo) ₹"
-                  value={adminRevenue.subscription_revenue_inr ?? 0}
+                  value={formatInrAbbrev(adminRevenue.subscription_revenue_inr ?? 0)}
+                  valueTitle={inrFullTitle(adminRevenue.subscription_revenue_inr ?? 0)}
+                  valueClassName="text-xl sm:text-2xl leading-snug"
                   icon={TrendingUp}
                 />
                 <StatCard
                   title="Escrow vol. (demo) ₹"
-                  value={adminRevenue.escrow_payment_volume_inr ?? 0}
+                  value={formatInrAbbrev(adminRevenue.escrow_payment_volume_inr ?? 0)}
+                  valueTitle={inrFullTitle(adminRevenue.escrow_payment_volume_inr ?? 0)}
+                  valueClassName="text-xl sm:text-2xl leading-snug"
                   icon={Activity}
                 />
                 <StatCard title="OK payments" value={adminRevenue.successful_payments ?? 0} icon={Package} />
@@ -268,24 +290,23 @@ export default function Dashboard() {
                     <span className="section-heading block mb-1">Pipeline</span>
                     <span className="section-title">RFQ status distribution</span>
                   </CardHeader>
-                  <CardBody className="h-64 chart-surface m-4 mt-0">
+                  <CardBody className="h-72 chart-surface m-4 mt-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
+                      <PieChart margin={{ top: 8, right: 8, bottom: 28, left: 8 }}>
                         <Pie
                           data={distToPieData(adminDashboard.rfqStatusDistribution, RFQ_STATUS_PIPELINE)}
                           dataKey="value"
                           nameKey="name"
                           cx="50%"
-                          cy="50%"
-                          outerRadius={88}
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          cy="42%"
+                          outerRadius={76}
                         >
                           {distToPieData(adminDashboard.rfqStatusDistribution, RFQ_STATUS_PIPELINE).map((_, i) => (
                             <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip />
-                        <Legend />
+                        <Tooltip formatter={(value, name) => [`${value}`, String(name)]} />
+                        <Legend wrapperStyle={{ fontSize: 12, lineHeight: '16px' }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardBody>
@@ -297,24 +318,23 @@ export default function Dashboard() {
                     <span className="section-heading block mb-1">Fulfillment</span>
                     <span className="section-title">Order status distribution</span>
                   </CardHeader>
-                  <CardBody className="h-64 chart-surface m-4 mt-0">
+                  <CardBody className="h-72 chart-surface m-4 mt-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
+                      <PieChart margin={{ top: 8, right: 8, bottom: 28, left: 8 }}>
                         <Pie
                           data={distToPieData(adminDashboard.orderStatusDistribution, ORDER_STATUS_PIPELINE)}
                           dataKey="value"
                           nameKey="name"
                           cx="50%"
-                          cy="50%"
-                          outerRadius={88}
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          cy="42%"
+                          outerRadius={76}
                         >
                           {distToPieData(adminDashboard.orderStatusDistribution, ORDER_STATUS_PIPELINE).map((_, i) => (
                             <Cell key={i} fill={CHART_COLORS[(i + 2) % CHART_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip />
-                        <Legend />
+                        <Tooltip formatter={(value, name) => [`${value}`, String(name)]} />
+                        <Legend wrapperStyle={{ fontSize: 12, lineHeight: '16px' }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardBody>
