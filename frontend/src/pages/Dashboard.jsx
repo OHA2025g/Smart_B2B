@@ -58,21 +58,24 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [adminRfqTrends, setAdminRfqTrends] = useState([]);
   const [adminOrderTrends, setAdminOrderTrends] = useState([]);
+  const [adminRevenue, setAdminRevenue] = useState(null);
 
   useEffect(() => {
     const load = async () => {
       try {
         if (user?.role === 'admin') {
-          const [summaryRes, dashboardRes, tr, tor] = await Promise.all([
+          const [summaryRes, dashboardRes, tr, tor, rev] = await Promise.all([
             adminApi.summary().catch(() => ({ data: { data: { summary: null } } })),
             adminApi.dashboard().catch(() => ({ data: { data: { dashboard: null } } })),
             adminApi.getAnalyticsRfqTrends().catch(() => ({ data: { data: { rfqTrends: [] } } })),
             adminApi.getAnalyticsOrderTrends().catch(() => ({ data: { data: { orderTrends: [] } } })),
+            adminApi.getRevenueSummary().catch(() => ({ data: { data: { revenue: null } } })),
           ]);
           setAdminSummary(summaryRes.data?.data?.summary ?? null);
           setAdminDashboard(dashboardRes.data?.data?.dashboard ?? null);
           setAdminRfqTrends(tr.data?.data?.rfqTrends || []);
           setAdminOrderTrends(tor.data?.data?.orderTrends || []);
+          setAdminRevenue(rev.data?.data?.revenue || null);
         } else if (user?.role === 'buyer') {
           const [dashRes, inqRes] = await Promise.all([
             buyerDashboardApi.get().then((r) => r.data.data?.dashboard).catch(() => null),
@@ -187,6 +190,43 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
+      {user?.role === 'seller' && sellerDashboard?.currentPlan && (
+        <Card className="mb-8 border-teal-100">
+          <CardHeader>
+            <span className="section-title">Your plan</span>
+          </CardHeader>
+          <CardBody>
+            <p className="text-slate-800 font-semibold capitalize text-lg">
+              {sellerDashboard.currentPlan.name} plan
+            </p>
+            <p className="text-sm text-slate-500 mt-1">
+              RFQs visible to your catalog: use Subscription to upgrade to GO/PRO.
+            </p>
+            <Link
+              to="/seller/subscription"
+              className="mt-3 inline-block text-sm font-semibold text-teal-600 hover:text-teal-800"
+            >
+              Manage subscription →
+            </Link>
+          </CardBody>
+        </Card>
+      )}
+
+      {user?.role === 'buyer' && buyerDashboard && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          <StatCard
+            title="Open payment attention"
+            value={buyerDashboard.pendingPayments ?? 0}
+            icon={Package}
+          />
+          <StatCard
+            title="In escrow (demo)"
+            value={buyerDashboard.escrowHeldOrders ?? 0}
+            icon={MessageSquare}
+          />
+        </div>
+      )}
+
       {user?.role === 'admin' && (adminSummary || adminDashboard) && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
@@ -198,6 +238,24 @@ export default function Dashboard() {
                 <StatCard title="Verified suppliers" value={adminDashboard.verifiedSuppliers} icon={Users} />
                 <StatCard title="RFQs" value={adminDashboard.totalRfqs} icon={Activity} />
                 <StatCard title="Orders" value={adminDashboard.totalOrders} icon={Package} />
+              </>
+            )}
+            {adminRevenue && (
+              <>
+                <StatCard
+                  title="Sub revenue (demo) ₹"
+                  value={adminRevenue.subscription_revenue_inr ?? 0}
+                  icon={TrendingUp}
+                />
+                <StatCard
+                  title="Escrow vol. (demo) ₹"
+                  value={adminRevenue.escrow_payment_volume_inr ?? 0}
+                  icon={Activity}
+                />
+                <StatCard title="OK payments" value={adminRevenue.successful_payments ?? 0} icon={Package} />
+                <StatCard title="Failed pays" value={adminRevenue.failed_payments ?? 0} icon={MessageSquare} />
+                <StatCard title="Active GO" value={adminRevenue.active_go_sellers ?? 0} icon={Users} />
+                <StatCard title="Active PRO" value={adminRevenue.active_pro_sellers ?? 0} icon={Users} />
               </>
             )}
           </div>

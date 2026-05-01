@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, Query
 from app.database import get_db
 from app.schemas.common import success_response, error_response, serialize_doc
 from app.services.supplier_score import TRUST_WEIGHTS, get_supplier_score_for_response
+from app.services.seller_plan import get_supplier_plan, plan_badge_and_flags, search_sort_key
 
 router = APIRouter()
 
@@ -16,7 +17,8 @@ async def list_suppliers(
     category: str | None = Query(None, description="Match if supplier has a product in this category"),
     verified_only: bool | None = Query(None),
     trust_level: str | None = Query(None),
-    sort: str = Query("trust", description="trust, orders, products, name"),
+    sort: str = Query("trust", description="trust, orders, products, name, recommended, pro_first"),
+    plan: str | None = Query(None, description="free, go, pro"),
     limit: int = Query(50, le=200, ge=1),
     skip: int = Query(0, ge=0),
 ):
@@ -52,6 +54,10 @@ async def list_suppliers(
             continue
         n_products = await db.products.count_documents({"seller": oid, "isActive": True})
         n_orders = await db.orders.count_documents({"seller": oid})
+        s_plan = await get_supplier_plan(db, oid)
+        pflags = plan_badge_and_flags(s_plan, bool(seller.get("isVerifiedSupplier")))
+        if plan and plan.lower() not in ("all", "") and (pflags.get("subscriptionPlan") or "free").lower() != plan.lower():
+            continue
         rows.append(
             {
                 "sellerId": str(oid),
@@ -64,16 +70,31 @@ async def list_suppliers(
                 "trustLevel": tl,
                 "productCount": n_products,
                 "orderCount": n_orders,
+                "subscriptionPlan": pflags.get("subscriptionPlan", "free"),
+                "planBadge": pflags.get("planBadge"),
+                "isFeaturedSupplier": pflags.get("isFeaturedSupplier"),
+                "searchBoostLabel": pflags.get("searchBoostLabel"),
             }
         )
-    key_map = {
-        "trust": lambda r: -r["trustScore"],
-        "orders": lambda r: -r["orderCount"],
-        "products": lambda r: -r["productCount"],
-        "name": lambda r: (r.get("companyName") or r.get("name") or "").lower(),
-    }
-    sk = key_map.get(sort, key_map["trust"])
-    rows.sort(key=sk)
+    srt = (sort or "trust").lower()
+    if srt in ("pro_first", "recommended"):
+        def _k(r: dict) -> tuple:
+            return search_sort_key(
+                r.get("subscriptionPlan", "free") or "free",
+                float(r.get("trustScore") or 0),
+                bool(r.get("verified")),
+                mode="pro_first" if srt == "pro_first" else "recommended",
+            )
+        rows.sort(key=_k)
+    else:
+        key_map = {
+            "trust": lambda r: -r["trustScore"],
+            "orders": lambda r: -r["orderCount"],
+            "products": lambda r: -r["productCount"],
+            "name": lambda r: (r.get("companyName") or r.get("name") or "").lower(),
+        }
+        sk = key_map.get(srt, key_map["trust"])
+        rows.sort(key=sk)
     page = rows[skip : skip + limit]
     return success_response(
         data={"suppliers": page, "total": len(rows), "returned": len(page)}
@@ -108,6 +129,8 @@ async def get_supplier_profile(seller_id: str, request: Request):
         raise HTTPException(status_code=404, detail=error_response("Supplier not found.", "NOT_FOUND", path=str(request.url.path)))
     profile = await db.companyprofiles.find_one({"user": oid})
     score_data = await get_supplier_score_for_response(oid)
+    s_plan = await get_supplier_plan(db, oid)
+    plan_flags = plan_badge_and_flags(s_plan, bool(seller.get("isVerifiedSupplier")))
     total_products_active = await db.products.count_documents({"seller": oid, "isActive": True})
     total_products_all = await db.products.count_documents({"seller": oid})
     my_product_ids = await db.products.find({"seller": oid}, {"_id": 1}).distinct("_id")
@@ -152,6 +175,11 @@ async def get_supplier_profile(seller_id: str, request: Request):
             "company_name": (profile or {}).get("companyName") or seller.get("name"),
             "verified": bool(seller.get("isVerifiedSupplier")),
             "verified_supplier": bool(seller.get("isVerifiedSupplier")),
+            "subscriptionPlan": plan_flags.get("subscriptionPlan", "free"),
+            "planBadge": plan_flags.get("planBadge"),
+            "isFeaturedSupplier": plan_flags.get("isFeaturedSupplier"),
+            "searchBoostLabel": plan_flags.get("searchBoostLabel"),
+            "verifiedSupplier": plan_flags.get("verifiedSupplier"),
             "trust_score": (score_data or {}).get("total_score", 0),
             "trust_level": (score_data or {}).get("trust_level", "Low Trust"),
             "score_breakdown": {

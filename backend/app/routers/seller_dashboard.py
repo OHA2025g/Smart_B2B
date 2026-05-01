@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Request
 from app.database import get_db
 from app.dependencies import get_current_user, require_roles
 from app.schemas.common import success_response, serialize_doc
+from app.services.seller_plan import get_supplier_plan, PLAN_CATALOG
 
 router = APIRouter(dependencies=[Depends(require_roles("seller"))])
 
@@ -45,8 +46,16 @@ async def seller_dashboard(request: Request, user: dict = Depends(get_current_us
             delta = (q["createdAt"] - rfq["createdAt"]).total_seconds() / 3600
             response_times.append(delta)
     avg_response_hours = sum(response_times) / len(response_times) if response_times else None
+    pl = await get_supplier_plan(db, uid)
     return success_response(data={
         "dashboard": {
+            "currentPlan": {
+                "id": pl.get("id", "free"),
+                "name": pl.get("name", "Free"),
+                "expiresAt": pl.get("expiresAt"),
+            },
+            "availablePlans": [PLAN_CATALOG["go"], PLAN_CATALOG["pro"]],
+
             "totalProducts": total_products,
             "activeRfqs": active_rfqs,
             "totalQuotesSubmitted": total_quotes,

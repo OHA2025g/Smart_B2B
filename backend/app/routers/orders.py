@@ -20,6 +20,8 @@ _ORDER_STATUS_EVENTS = {
 
 _PAYMENT_LABELS = {
     "payment_pending": "PAYMENT_PENDING",
+    "initiated": "PAYMENT_INITIATED",
+    "payment_failed": "PAYMENT_FAILED",
     "escrow_held": "ESCROW_HELD",
     "released": "PAYMENT_RELEASED",
     "refunded": "PAYMENT_REFUNDED",
@@ -56,11 +58,18 @@ async def _populate_order(db, order):
         out["sellerCompany"] = seller_company
         if out.get("paymentStatus") is None:
             out["paymentStatus"] = "payment_pending"
+        if out.get("escrowStatus") is None:
+            out["escrowStatus"] = "not_started"
     return out
 
 
 @router.get("/me")
-async def get_my(request: Request, status: str | None = Query(None), user: dict = Depends(get_current_user)):
+async def get_my(
+    request: Request,
+    status: str | None = Query(None),
+    payment_status: str | None = Query(None, description="Filter by order paymentStatus"),
+    user: dict = Depends(get_current_user),
+):
     db = get_db()
     uid = ObjectId(user["id"])
     if user.get("role") == "admin":
@@ -69,6 +78,8 @@ async def get_my(request: Request, status: str | None = Query(None), user: dict 
         filter_q = {"sellerId": uid} if user.get("role") == "seller" else {"buyerId": uid}
     if status:
         filter_q["status"] = status
+    if payment_status:
+        filter_q["paymentStatus"] = payment_status
     cursor = db.orders.find(filter_q).sort("createdAt", -1)
     orders = [await _populate_order(db, o) async for o in cursor]
     return success_response(data={"orders": orders})

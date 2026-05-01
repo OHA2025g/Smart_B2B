@@ -116,6 +116,19 @@ export const ordersApi = {
   getTimeline: (orderId) => client.get(`${apiBase}/api/orders/${orderId}/timeline`),
   updateStatus: (id, status) => client.put(`${apiBase}/api/orders/${id}/status`, { status }),
   updatePayment: (id, paymentStatus) => client.put(`${apiBase}/api/orders/${id}/payment`, { paymentStatus }),
+  getPayments: (orderId) => client.get(`${apiBase}/api/orders/${orderId}/payments`),
+  initiatePayment: (orderId) => client.post(`${apiBase}/api/orders/${orderId}/payments/initiate`, {}),
+  simulateOrderPayment: (orderId, paymentId, body) =>
+    client.post(`${apiBase}/api/orders/${orderId}/payments/${paymentId}/simulate`, body),
+  releaseEscrow: (orderId) => client.post(`${apiBase}/api/orders/${orderId}/payments/release`, {}),
+};
+
+export const subscriptionApi = {
+  getPlans: () => client.get(`${apiBase}/api/subscriptions/plans`),
+  getMe: () => client.get(`${apiBase}/api/subscriptions/me`),
+  checkout: (body) => client.post(`${apiBase}/api/subscriptions/checkout`, body),
+  simulate: (paymentId, body) =>
+    client.post(`${apiBase}/api/subscriptions/payment/${paymentId}/simulate`, body),
 };
 
 export const messagesApi = {
@@ -151,6 +164,9 @@ export const adminApi = {
   getAnalyticsTopProducts: () => client.get(`${apiBase}/api/admin/analytics/top-products`),
   getAnalyticsRfqTrends: () => client.get(`${apiBase}/api/admin/analytics/rfq-trends`),
   getAnalyticsOrderTrends: () => client.get(`${apiBase}/api/admin/analytics/order-trends`),
+  getSubscriptions: () => client.get(`${apiBase}/api/admin/subscriptions`),
+  getPayments: () => client.get(`${apiBase}/api/admin/payments`),
+  getRevenueSummary: () => client.get(`${apiBase}/api/admin/revenue-summary`),
 };
 
 export const suppliersApi = {

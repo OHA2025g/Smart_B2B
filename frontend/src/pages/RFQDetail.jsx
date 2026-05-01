@@ -37,6 +37,7 @@ import { useToast } from '../components/ui/Toast';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { SupplierPlanBadges } from '../components/SupplierPlanBadges';
 import { Input } from '../components/ui/Input';
 import { formatDateTimeIst, formatDateIst } from '../lib/istTime';
 
@@ -625,11 +626,14 @@ export default function RFQDetail() {
                       </td>
                       <td className="py-4 px-4 align-top font-medium text-slate-900">
                         <span className="block">{(row.company_name || '').trim() || row.seller_name || '—'}</span>
-                        {row.verified_supplier && (
-                          <Badge variant="success" className="mt-2 text-[10px]">
-                            Verified
-                          </Badge>
-                        )}
+                        <div className="mt-1.5">
+                          <SupplierPlanBadges
+                            plan={row.subscriptionPlan}
+                            verified={row.verified_supplier}
+                            featured={row.is_featured_supplier}
+                            compact
+                          />
+                        </div>
                       </td>
                       <td className="py-4 px-4 align-top font-semibold tabular-nums text-slate-900">{fmtInr(row.quoted_price ?? row.total_amount)}</td>
                       <td className="py-4 px-4 align-top text-slate-600">{row.delivery_days ?? '—'} days</td>

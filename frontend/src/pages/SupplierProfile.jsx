@@ -5,8 +5,10 @@ import { Shield, MapPin, Package, FileText, CheckCircle, Clock, Award, BarChart3
 import { suppliersApi, productsApi } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { SupplierPlanBadges } from '../components/SupplierPlanBadges';
 import { EmptyState } from '../components/ui/EmptyState';
 import { getCategoryImage } from '../utils/getCategoryImage';
+import { formatDateTimeIst } from '../lib/istTime';
 
 function MetricTile({ label, value, sub }) {
   return (
@@ -89,11 +91,14 @@ export default function SupplierProfile() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{displayName}</h1>
-                  {profile.verified && (
-                    <Badge variant="success" className="gap-1 font-semibold !bg-emerald-500/20 !text-emerald-100 !ring-emerald-400/40">
-                      <CheckCircle className="h-3.5 w-3.5" /> Verified supplier
-                    </Badge>
-                  )}
+                </div>
+                <div className="mb-2">
+                  <SupplierPlanBadges
+                    plan={profile.subscriptionPlan}
+                    verified={profile.verified}
+                    featured={profile.isFeaturedSupplier}
+                    searchBoost={profile.searchBoostLabel}
+                  />
                 </div>
                 <p className="text-slate-300 text-sm">{profile.seller_name || seller.name}</p>
                 {profile.email && <p className="text-slate-400 text-xs mt-1">{profile.email}</p>}

@@ -29,6 +29,8 @@ from app.routers import (
     notifications,
     seller_dashboard,
     buyer_dashboard,
+    subscriptions,
+    order_payments,
 )
 
 try:
@@ -93,6 +95,8 @@ app.include_router(suppliers.router, prefix="/api/suppliers", tags=["suppliers"]
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(seller_dashboard.router, prefix="/api/seller", tags=["seller"])
 app.include_router(buyer_dashboard.router, prefix="/api/buyer", tags=["buyer"])
+app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["subscriptions"])
+app.include_router(order_payments.router, prefix="/api/orders", tags=["orders"])
 
 # Optional: serve frontend in production
 if settings.node_env == "production":

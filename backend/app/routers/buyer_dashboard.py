@@ -18,6 +18,12 @@ async def buyer_dashboard(request: Request, user: dict = Depends(get_current_use
     quotes_received = await db.quotes.count_documents({"rfqId": {"$in": my_rfq_ids}}) if my_rfq_ids else 0
     accepted_quotes = await db.quotes.count_documents({"rfqId": {"$in": my_rfq_ids}, "status": "accepted"}) if my_rfq_ids else 0
     orders_placed = await db.orders.count_documents({"buyerId": uid})
+    pending_payments = await db.orders.count_documents(
+        {"buyerId": uid, "paymentStatus": {"$in": ["payment_pending", "payment_failed"]}}
+    )
+    escrow_held = await db.orders.count_documents(
+        {"buyerId": uid, "paymentStatus": "escrow_held", "escrowStatus": "held"}
+    )
     recent_rfqs_cursor = db.rfqs.find({"buyerId": uid}).sort("createdAt", -1).limit(5)
     recent_rfqs = []
     async for r in recent_rfqs_cursor:
@@ -41,6 +47,8 @@ async def buyer_dashboard(request: Request, user: dict = Depends(get_current_use
             "quotesReceived": quotes_received,
             "acceptedQuotes": accepted_quotes,
             "ordersPlaced": orders_placed,
+            "pendingPayments": pending_payments,
+            "escrowHeldOrders": escrow_held,
             "recentRfqs": recent_rfqs,
             "recentOrders": recent_orders,
             "rfqStatusDistribution": rfq_status_distribution,

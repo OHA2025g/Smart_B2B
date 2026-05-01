@@ -4,12 +4,13 @@ Production-style demo data generation for B2Bभारत mid-term demo.
 Populates: users, companyprofiles, categories, products, wishlistitems,
 cartitems, rfqs, quotes, orders, supplier_scores, adminactionlogs.
 
-Preserves: admin@smartb2b.com, seller@example.com, buyer@example.com.
+Preserves: admin, seller@, buyer@, and classroom tier sellers (free / GO / PRO).
 
 Run: python -m scripts.generate_demo_data
 """
 import asyncio
 import os
+from scripts.demo_plans_payments import apply_demo_plans_payments
 import random
 import re
 from datetime import datetime, timedelta
@@ -28,9 +29,16 @@ except ImportError:
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/smartb2b")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-PRESERVED_EMAILS = {"admin@smartb2b.com", "seller@example.com", "buyer@example.com"}
+PRESERVED_EMAILS = {
+    "admin@smartb2b.com",
+    "seller@example.com",
+    "buyer@example.com",
+    "freesupplier@smartb2b.com",
+    "gosupplier@smartb2b.com",
+    "prosupplier@smartb2b.com",
+}
 
-# Target scale: hundreds of core entities + rich RFQ/order pipeline (12 categories, 3 preserved users).
+# Target scale: hundreds of core entities + rich RFQ/order pipeline (12 categories, 6 preserved accounts).
 # Tuned for a realistic B2B demo: busy listings, RFQ pipeline, orders, admin activity.
 COUNTS = {
     "categories": 12,
@@ -123,7 +131,7 @@ def _now():
 
 
 async def ensure_preserved_users(db):
-    """Ensure admin, seller@example.com, buyer@example.com exist; return their ObjectIds."""
+    """Ensure core + classroom Free/GO/PRO supplier accounts; return 6 user ObjectIds."""
     now = _now()
     users_coll = db.users
     result = {}
@@ -132,6 +140,9 @@ async def ensure_preserved_users(db):
         ("admin@smartb2b.com", "admin", "Admin User", "Admin@123", False),
         ("seller@example.com", "seller", "Demo Seller", "Seller@123", True),
         ("buyer@example.com", "buyer", "Demo Buyer", "Buyer@123", False),
+        ("freesupplier@smartb2b.com", "seller", "Classroom Free Supplier", "FreeDemo@123", True),
+        ("gosupplier@smartb2b.com", "seller", "Classroom GO Supplier", "GoDemo@123", True),
+        ("prosupplier@smartb2b.com", "seller", "Classroom PRO Supplier", "ProDemo@123", True),
     ]:
         u = await users_coll.find_one({"email": email})
         if not u:
@@ -149,18 +160,27 @@ async def ensure_preserved_users(db):
             print(f"  Created preserved user: {email}")
         else:
             result[email] = u["_id"]
-    return result["admin@smartb2b.com"], result["seller@example.com"], result["buyer@example.com"]
+    return (
+        result["admin@smartb2b.com"],
+        result["seller@example.com"],
+        result["buyer@example.com"],
+        result["freesupplier@smartb2b.com"],
+        result["gosupplier@smartb2b.com"],
+        result["prosupplier@smartb2b.com"],
+    )
 
 
 async def clear_demo_data(db, preserved_user_ids):
-    """Remove demo-generated data; preserve only the three fixed users and their profiles."""
-    admin_id, seller_id, buyer_id = preserved_user_ids
-    preserved = {admin_id, seller_id, buyer_id}
+    """Remove demo-generated data; preserve 6 fixed accounts."""
+    admin_id, seller_id, buyer_id, free_id, go_id, pro_id = preserved_user_ids
+    preserved = {admin_id, seller_id, buyer_id, free_id, go_id, pro_id}
 
     # Order matters: dependents first
     await db.adminactionlogs.delete_many({})
     await db.workflow_events.delete_many({})
     await db.notifications.delete_many({})
+    await db.payments.delete_many({})
+    await db.seller_subscriptions.delete_many({})
     await db.orders.delete_many({})
     await db.quotes.delete_many({})
     await db.rfqs.delete_many({})
@@ -175,7 +195,7 @@ async def clear_demo_data(db, preserved_user_ids):
     await db.categories.delete_many({})
     # users: delete anyone not in preserved
     await db.users.delete_many({"_id": {"$nin": list(preserved)}})
-    print("  Cleared demo data (preserved admin, seller@example.com, buyer@example.com).")
+    print("  Cleared demo data (preserved 6 core accounts + classroom tier suppliers).")
 
 
 def _product_title(category, product_list):
@@ -200,9 +220,9 @@ async def create_categories(db):
     return names
 
 
-async def create_users(db, admin_id, seller_id, buyer_id):
+async def create_users(db, admin_id, seller_id, buyer_id, free_id, go_id, pro_id):
     """Create demo sellers and buyers (counts from COUNTS) with realistic Indian names/emails."""
-    preserved = {admin_id, seller_id, buyer_id}
+    preserved = {admin_id, seller_id, buyer_id, free_id, go_id, pro_id}
     now = _now()
     sellers, buyers = [], []
 
@@ -247,7 +267,7 @@ async def create_users(db, admin_id, seller_id, buyer_id):
         buyers.append(r.inserted_id)
 
     # Include preserved seller/buyer in the lists we return for generating data
-    all_sellers = [seller_id] + sellers
+    all_sellers = [seller_id, free_id, go_id, pro_id] + sellers
     all_buyers = [buyer_id] + buyers
     return all_sellers, all_buyers
 
@@ -882,14 +902,107 @@ async def boost_preserved_demo_accounts(db, seller_id, buyer_id, admin_id, categ
     })
 
 
+
+
+async def apply_classroom_tier_showcase(db, free_id, go_id, pro_id, category_names):
+    """Distinct company names + one obvious listing per classroom tier (for teacher demo)."""
+    now = _now()
+    cat0 = category_names[0] if category_names else "Industrial"
+    await db.companyprofiles.update_one(
+        {"user": free_id},
+        {
+            "$set": {
+                "user": free_id,
+                "companyName": "Classroom FREE — Standard Supplier",
+                "description": "Free plan: standard listing, limited RFQ visibility (demo).",
+                "city": "Mumbai",
+                "state": "Maharashtra",
+                "country": "India",
+                "phone": "+91 9000000001",
+            }
+        },
+        upsert=True,
+    )
+    await db.companyprofiles.update_one(
+        {"user": go_id},
+        {
+            "$set": {
+                "user": go_id,
+                "companyName": "Classroom GO — RFQ+ Analytics",
+                "description": "GO plan: unlimited RFQ viewing and quote replies, basic analytics (demo).",
+                "city": "Bengaluru",
+                "state": "Karnataka",
+                "country": "India",
+                "phone": "+91 9000000002",
+            }
+        },
+        upsert=True,
+    )
+    await db.companyprofiles.update_one(
+        {"user": pro_id},
+        {
+            "$set": {
+                "user": pro_id,
+                "companyName": "Classroom PRO — Featured + Boost",
+                "description": "PRO plan: search boost, featured badge, priority discovery (demo).",
+                "city": "New Delhi",
+                "state": "Delhi",
+                "country": "India",
+                "phone": "+91 9000000003",
+            }
+        },
+        upsert=True,
+    )
+    await db.products.insert_many(
+        [
+            {
+                "seller": free_id,
+                "title": "[FREE tier] MS angles — standard listing",
+                "description": "Demo product for Free supplier account.",
+                "category": cat0,
+                "price": 199.0,
+                "unit": "kg",
+                "minOrderQuantity": 10,
+                "city": "Mumbai",
+                "isActive": True,
+                "createdAt": now,
+            },
+            {
+                "seller": go_id,
+                "title": "[GO tier] Steel pipes — full RFQ access",
+                "description": "Demo product for GO supplier account.",
+                "category": cat0,
+                "price": 449.0,
+                "unit": "meter",
+                "minOrderQuantity": 50,
+                "city": "Bengaluru",
+                "isActive": True,
+                "createdAt": now,
+            },
+            {
+                "seller": pro_id,
+                "title": "[PRO tier] Industrial fasteners — featured + boost",
+                "description": "Demo product for PRO supplier account (featured in listings).",
+                "category": cat0,
+                "price": 899.0,
+                "unit": "box",
+                "minOrderQuantity": 5,
+                "city": "New Delhi",
+                "isActive": True,
+                "createdAt": now,
+            },
+        ]
+    )
+    print("  Applied classroom FREE/GO/PRO showcase companies + products.")
+
 async def run():
     client = AsyncIOMotorClient(MONGODB_URI)
     db = client[_db_name()]
     print("Connected to MongoDB")
 
     print("1. Ensuring preserved users...")
-    admin_id, seller_id, buyer_id = await ensure_preserved_users(db)
-    preserved = (admin_id, seller_id, buyer_id)
+    admin_id, seller_id, buyer_id, free_id, go_id, pro_id = await ensure_preserved_users(db)
+    preserved = (admin_id, seller_id, buyer_id, free_id, go_id, pro_id)
 
     print("2. Clearing demo data...")
     await clear_demo_data(db, preserved)
@@ -899,10 +1012,11 @@ async def run():
     category_names = await create_categories(db)
 
     print("4. Creating users (sellers + buyers)...")
-    all_sellers, all_buyers = await create_users(db, admin_id, seller_id, buyer_id)
+    all_sellers, all_buyers = await create_users(db, admin_id, seller_id, buyer_id, free_id, go_id, pro_id)
 
     print("5. Creating company profiles...")
     await create_company_profiles(db, all_sellers)
+    await apply_classroom_tier_showcase(db, free_id, go_id, pro_id, category_names)
 
     print("6. Creating products...")
     products = await create_products(db, all_sellers, category_names)
@@ -932,6 +1046,8 @@ async def run():
     await boost_preserved_demo_accounts(db, seller_id, buyer_id, admin_id, category_names, all_buyers)
     await create_supplier_scores(db, [seller_id])
 
+    await apply_demo_plans_payments(db, all_sellers, seller_id, buyer_id, free_id, go_id, pro_id)
+
     # Summary
     print("\n--- Summary ---")
     for name, coll in [
@@ -947,11 +1063,19 @@ async def run():
         ("supplier_scores", db.supplier_scores),
         ("adminactionlogs", db.adminactionlogs),
         ("workflow_events", db.workflow_events),
+        ("payments", db.payments),
+        ("seller_subscriptions", db.seller_subscriptions),
         ("notifications", db.notifications),
     ]:
         c = await coll.count_documents({})
         print(f"  {name}: {c}")
-    print("\nPreserved credentials: admin@smartb2b.com / Admin@123, seller@example.com / Seller@123, buyer@example.com / Buyer@123")
+    print("\nPreserved logins (passwords):")
+    print("  admin@smartb2b.com  / Admin@123")
+    print("  buyer@example.com   / Buyer@123")
+    print("  seller@example.com  / Seller@123  (general free seller)")
+    print("  freesupplier@smartb2b.com  / FreeDemo@123  — Free tier classroom")
+    print("  gosupplier@smartb2b.com   / GoDemo@123   — GO tier classroom")
+    print("  prosupplier@smartb2b.com  / ProDemo@123  — PRO tier classroom")
     print("Demo users (sellers/buyers): password Demo@123")
     client.close()
 

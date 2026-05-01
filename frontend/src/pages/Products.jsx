@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/Badge';
 import { SkeletonCard } from '../components/ui/SkeletonCard';
 import { EmptyState } from '../components/ui/EmptyState';
 import { getCategoryImage } from '../utils/getCategoryImage';
+import { SupplierPlanBadges } from '../components/SupplierPlanBadges';
 
 const TRUST_LEVELS = ['Highly Trusted', 'Trusted', 'Moderate', 'Low Trust'];
 
@@ -31,6 +32,8 @@ export default function Products() {
   const [trustLevel, setTrustLevel] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [plan, setPlan] = useState('');
+  const [sort, setSort] = useState('recommended');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
@@ -57,6 +60,8 @@ export default function Products() {
     const tl = overrides.trust_level !== undefined ? overrides.trust_level : trustLevel;
     const minP = overrides.min_price !== undefined ? overrides.min_price : minPrice;
     const maxP = overrides.max_price !== undefined ? overrides.max_price : maxPrice;
+    const pln = overrides.plan !== undefined ? overrides.plan : plan;
+    const srt = overrides.sort !== undefined ? overrides.sort : sort;
     try {
       const params = {};
       if (srch) params.search = srch;
@@ -66,6 +71,8 @@ export default function Products() {
       if (tl) params.trust_level = tl;
       if (minP !== '' && minP != null) params.min_price = Number(minP);
       if (maxP !== '' && maxP != null) params.max_price = Number(maxP);
+      if (pln) params.plan = pln;
+      if (srt) params.sort = srt;
       const { data } = await productsApi.list(params);
       setProducts(data.data.products || []);
     } catch {
@@ -126,6 +133,8 @@ export default function Products() {
     setTrustLevel('');
     setMinPrice('');
     setMaxPrice('');
+    setPlan('');
+    setSort('recommended');
     setLoading(true);
     productsApi
       .list({})
@@ -239,6 +248,36 @@ export default function Products() {
               </select>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Supplier plan</label>
+              <select
+                value={plan}
+                onChange={(e) => setPlan(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white text-slate-800 shadow-sm focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400"
+              >
+                <option value="">Any</option>
+                <option value="free">Free</option>
+                <option value="go">GO</option>
+                <option value="pro">PRO</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Sort</label>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white text-slate-800 shadow-sm focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400"
+              >
+                <option value="recommended">Recommended</option>
+                <option value="pro_first">PRO first</option>
+                <option value="newest">Newest</option>
+                <option value="price_asc">Price: low to high</option>
+                <option value="price_desc">Price: high to low</option>
+              </select>
+            </div>
+          </div>
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 pt-1 border-t border-slate-100">
             <label className="inline-flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer select-none rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 hover:bg-slate-50">
               <input
@@ -333,13 +372,13 @@ export default function Products() {
                             )}
                           </div>
                           <div className="flex flex-wrap gap-2 items-center">
-                            {p.seller?.isVerifiedSupplier ? (
-                              <Badge variant="success" className="gap-1">
-                                <ShieldCheck className="h-3 w-3" /> Verified
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-slate-500">Unverified</Badge>
-                            )}
+                            <SupplierPlanBadges
+                              plan={p.seller?.subscriptionPlan}
+                              verified={p.seller?.isVerifiedSupplier}
+                              featured={p.seller?.isFeaturedSupplier}
+                              searchBoost={p.seller?.searchBoostLabel}
+                              compact
+                            />
                             {p.seller?.trustScore != null && (
                               <Badge variant="primary" className="gap-1 font-semibold tabular-nums">
                                 <TrendingUp className="h-3 w-3" />

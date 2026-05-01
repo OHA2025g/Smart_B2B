@@ -6,6 +6,7 @@ from app.dependencies import get_current_user, require_roles
 from app.schemas.common import success_response, error_response, serialize_doc
 from app.schemas.product import ProductCreate, ProductUpdate
 from app.services.supplier_score import get_supplier_score_for_response
+from app.services.seller_plan import get_supplier_plan, plan_badge_and_flags, search_sort_key
 
 router = APIRouter()
 
@@ -16,6 +17,9 @@ async def _enrich_seller_with_score(seller_doc: dict, seller_oid) -> dict:
     out = serialize_doc(seller_doc)
     if not out:
         return None
+    db = get_db()
+    plan = await get_supplier_plan(db, seller_oid)
+    out |= plan_badge_and_flags(plan, bool(seller_doc.get("isVerifiedSupplier")))
     score = await get_supplier_score_for_response(seller_oid)
     if score:
         out["trustScore"] = score.get("total_score", 0)
@@ -33,9 +37,10 @@ async def list_products(
     trust_level: str | None = Query(None, description="Filter by supplier trust level label"),
     min_price: float | None = Query(None),
     max_price: float | None = Query(None),
+    plan: str | None = Query(None, description="free, go, or pro"),
     sort: str = Query(
         "newest",
-        description="newest, relevance, price_asc, price_desc, trust",
+        description="newest, relevance, price_asc, price_desc, trust, pro_first, recommended",
     ),
 ):
     db = get_db()
@@ -59,7 +64,18 @@ async def list_products(
     cursor = db.products.find(filter_q).sort("createdAt", -1)
     products = []
     async for p in cursor:
-        seller = await db.users.find_one({"_id": p["seller"]}, projection={"name": 1, "email": 1, "isVerifiedSupplier": 1}) if p.get("seller") else None
+        seller = await db.users.find_one(
+        {"_id": p["seller"]},
+        projection={
+            "name": 1,
+            "email": 1,
+            "isVerifiedSupplier": 1,
+            "subscriptionPlan": 1,
+            "sellerPlanExpiresAt": 1,
+            "isFeaturedSupplier": 1,
+            "isProSearchBoost": 1,
+        },
+    ) if p.get("seller") else None
         doc = serialize_doc(p)
         if doc:
             doc["seller"] = await _enrich_seller_with_score(seller, p["seller"]) if seller else None
@@ -67,8 +83,22 @@ async def list_products(
                 tl = (doc["seller"].get("trustLevel") or "").lower()
                 if trust_level.lower() not in tl.lower():
                     continue
+            if plan and doc.get("seller"):
+                sp = (doc["seller"].get("subscriptionPlan") or "free").lower()
+                if plan.lower() != "all" and sp != plan.lower():
+                    continue
         products.append(doc)
     s = (sort or "newest").lower()
+    if s in ("pro_first", "recommended"):
+        def _k(d):
+            sdoc = d.get("seller") or {}
+            return search_sort_key(
+                sdoc.get("subscriptionPlan", "free") or "free",
+                sdoc.get("trustScore", 0) or 0,
+                bool(sdoc.get("isVerifiedSupplier")),
+                mode="pro_first" if s == "pro_first" else "recommended",
+            )
+        products.sort(key=_k)
     if s == "price_asc":
         products.sort(key=lambda d: float(d.get("price") or 0))
     elif s == "price_desc":
@@ -101,7 +131,15 @@ async def get_by_id(id: str, request: Request):
     product = await db.products.find_one({"_id": oid})
     if not product:
         raise HTTPException(status_code=404, detail=error_response("Product not found.", "NOT_FOUND", path=str(request.url.path)))
-    seller = await db.users.find_one({"_id": product["seller"]}, projection={"name": 1, "email": 1, "isVerifiedSupplier": 1}) if product.get("seller") else None
+    seller = await db.users.find_one(
+        {"_id": product["seller"]},
+        projection={
+            "name": 1,
+            "email": 1,
+            "isVerifiedSupplier": 1,
+            "subscriptionPlan": 1,
+        },
+    ) if product.get("seller") else None
     doc = serialize_doc(product)
     if doc:
         doc["seller"] = await _enrich_seller_with_score(seller, product["seller"]) if seller else None

@@ -1,13 +1,14 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Building2, CheckCircle, Search } from 'lucide-react';
+import { Building2, Search } from 'lucide-react';
 import { suppliersApi } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
+import { SupplierPlanBadges } from '../components/SupplierPlanBadges';
 
 function trustVariant(level) {
   if (!level) return 'default';
@@ -26,7 +27,9 @@ export default function Suppliers() {
   const [city, setCity] = useState('');
   const [category, setCategory] = useState('');
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [sort, setSort] = useState('trust');
+  const [plan, setPlan] = useState('');
+  const [trustFilter, setTrustFilter] = useState('');
+  const [sort, setSort] = useState('recommended');
 
   const params = useMemo(
     () => ({
@@ -34,9 +37,11 @@ export default function Suppliers() {
       city: city.trim() || undefined,
       category: category.trim() || undefined,
       verified_only: verifiedOnly || undefined,
+      plan: plan || undefined,
+      trust_level: trustFilter || undefined,
       sort,
     }),
-    [search, city, category, verifiedOnly, sort],
+    [search, city, category, verifiedOnly, plan, trustFilter, sort],
   );
 
   useEffect(() => {
@@ -95,6 +100,36 @@ export default function Suppliers() {
             <Input className="mt-1" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Steel" />
           </div>
         </div>
+
+          <div className="mt-3 grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase">Plan</label>
+              <select
+                className="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm"
+                value={plan}
+                onChange={(e) => setPlan(e.target.value)}
+              >
+                <option value="">All plans</option>
+                <option value="free">Free</option>
+                <option value="go">GO</option>
+                <option value="pro">PRO</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase">Trust level</label>
+              <select
+                className="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm"
+                value={trustFilter}
+                onChange={(e) => setTrustFilter(e.target.value)}
+              >
+                <option value="">Any</option>
+                <option value="Highly Trusted">Highly Trusted</option>
+                <option value="Trusted">Trusted</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Low Trust">Low Trust</option>
+              </select>
+            </div>
+          </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="inline-flex items-center gap-2 text-sm">
             <input
@@ -111,6 +146,8 @@ export default function Suppliers() {
               value={sort}
               onChange={(e) => setSort(e.target.value)}
             >
+              <option value="recommended">Recommended</option>
+              <option value="pro_first">PRO first</option>
               <option value="trust">Trust score</option>
               <option value="orders">Orders</option>
               <option value="products">Products</option>
@@ -141,13 +178,16 @@ export default function Suppliers() {
               <Card className="p-4 sm:p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                   <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="font-semibold text-lg">{s.companyName || s.name || 'Supplier'}</h2>
-                      {s.verified && (
-                        <Badge variant="success" className="gap-1">
-                          <CheckCircle className="h-3 w-3" /> Verified
-                        </Badge>
-                      )}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="font-semibold text-lg">{s.companyName || s.name || 'Supplier'}</h2>
+                      </div>
+                      <SupplierPlanBadges
+                        plan={s.subscriptionPlan}
+                        verified={s.verified}
+                        featured={s.isFeaturedSupplier}
+                        searchBoost={s.searchBoostLabel}
+                      />
                     </div>
                     <p className="text-sm text-slate-500 mt-1">
                       {s.city || '—'}

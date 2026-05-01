@@ -20,6 +20,8 @@ import Suppliers from './pages/Suppliers';
 import Notifications from './pages/Notifications';
 import OrderDetail from './pages/OrderDetail';
 import Orders from './pages/Orders';
+import Subscription from './pages/Subscription';
+import SubscriptionCheckout from './pages/SubscriptionCheckout';
 
 function App() {
   return (
@@ -48,6 +50,22 @@ function App() {
           }
         />
         <Route path="orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
+        <Route
+          path="seller/subscription"
+          element={
+            <ProtectedRoute allowedRoles={['seller']}>
+              <Subscription />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="seller/subscription/checkout/:paymentId"
+          element={
+            <ProtectedRoute allowedRoles={['seller']}>
+              <SubscriptionCheckout />
+            </ProtectedRoute>
+          }
+        />
         <Route path="seller/rfqs" element={<ProtectedRoute allowedRoles={['seller']}><SellerRFQs /></ProtectedRoute>} />
         <Route path="seller/orders" element={<Navigate to="/orders" replace />} />
         <Route path="admin/panel" element={<ProtectedRoute allowedRoles={['admin']}><AdminPanel /></ProtectedRoute>} />

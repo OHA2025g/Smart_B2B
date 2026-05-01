@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { ordersApi, adminApi } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { paymentStatusLabel } from '../components/SupplierPlanBadges';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 
@@ -32,14 +33,18 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
+  const [payFilter, setPayFilter] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    const orderParams = {};
+    if (status) orderParams.status = status;
+    if (payFilter) orderParams.payment_status = payFilter;
     const p =
       user?.role === 'admin'
         ? adminApi.getOrders()
-        : ordersApi.getMy(status ? { status } : undefined);
+        : ordersApi.getMy(Object.keys(orderParams).length ? orderParams : undefined);
     p.then((res) => {
       if (!cancelled) setOrders(res.data.data.orders || []);
     })
@@ -52,12 +57,15 @@ export default function Orders() {
     return () => {
       cancelled = true;
     };
-  }, [user?.role, status]);
+  }, [user?.role, status, payFilter]);
 
   const filtered = useMemo(() => {
     let list = orders;
     if (user?.role === 'admin' && status) {
       list = list.filter((o) => o.status === status);
+    }
+    if (payFilter) {
+      list = list.filter((o) => (o.paymentStatus || 'payment_pending') === payFilter);
     }
     const q = search.trim().toLowerCase();
     if (!q) return list;
@@ -67,7 +75,7 @@ export default function Orders() {
       const sellerCo = (o.sellerCompany || o.sellerId?.name || '').toLowerCase();
       return idShort.includes(q) || buyerCo.includes(q) || sellerCo.includes(q);
     });
-  }, [orders, search, status, user?.role]);
+  }, [orders, search, status, payFilter, user?.role]);
 
   const title =
     user?.role === 'admin' ? 'All orders' : user?.role === 'seller' ? 'Orders received' : 'Orders placed';
@@ -109,6 +117,22 @@ export default function Orders() {
                   {o.label}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="sm:w-48">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Payment</label>
+            <select
+              value={payFilter}
+              onChange={(e) => setPayFilter(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            >
+              <option value="">All</option>
+              <option value="payment_pending">Payment pending</option>
+              <option value="initiated">Initiated</option>
+              <option value="escrow_held">Escrow held</option>
+              <option value="payment_failed">Failed</option>
+              <option value="released">Released</option>
+              <option value="refunded">Refunded</option>
             </select>
           </div>
           <div className="flex-1 min-w-0">
@@ -162,7 +186,10 @@ export default function Orders() {
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <Badge variant={badgeVariant(o.status)} className="capitalize font-semibold">
-                      {o.status}
+                      Order: {o.status}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs font-medium border-slate-200">
+                      {paymentStatusLabel(o.paymentStatus)}
                     </Badge>
                     <p className="text-lg font-bold text-slate-900 tabular-nums">₹{o.totalAmount ?? '—'}</p>
                     <Link

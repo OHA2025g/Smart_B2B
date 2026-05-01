@@ -7,6 +7,7 @@ from app.schemas.common import success_response, error_response, serialize_doc, 
 from app.schemas.rfq import BuyerCounterOfferCreate, RfqCreate, RfqStatusUpdate, QuoteSubmit
 from app.schemas.message import MessagePost
 from app.services.supplier_score import get_supplier_score_for_response, compute_quote_score
+from app.services.seller_plan import get_supplier_plan, rfq_list_limit_for_plan
 from app.services.workflow_events import emit_event
 from app.services.notifications import create_notification
 from app.services.expiry_helpers import (
@@ -185,9 +186,14 @@ async def get_assigned(request: Request, user: dict = Depends(require_roles("sel
     db = get_db()
     my_products = await db.products.find({"seller": ObjectId(user["id"])}, projection={"_id": 1}).to_list(None)
     my_ids = [p["_id"] for p in my_products]
+    sp = await get_supplier_plan(db, ObjectId(user["id"]))
+    cap = rfq_list_limit_for_plan(sp)
     cursor = db.rfqs.find({"items.productId": {"$in": my_ids}, "status": {"$in": ["sent", "quoted"]}}).sort("createdAt", -1)
+    all_rows = [r async for r in cursor]
+    if cap is not None:
+        all_rows = all_rows[: int(cap)]
     rfqs = []
-    async for rfq in cursor:
+    for rfq in all_rows:
         items = await _populate_rfq_items(db, rfq.get("items", []))
         buyer = await db.users.find_one({"_id": rfq["buyerId"]}, projection={"name": 1, "email": 1}) if rfq.get("buyerId") else None
         doc = _serialize_rfq_enriched(rfq)
@@ -195,7 +201,9 @@ async def get_assigned(request: Request, user: dict = Depends(require_roles("sel
             doc["items"] = items
             doc["buyerId"] = serialize_doc(buyer) if buyer else None
         rfqs.append(doc)
-    return success_response(data={"rfqs": rfqs})
+    return success_response(
+        data={"rfqs": rfqs, "rfqAccess": {"limited": cap is not None, "dailyCap": cap, "plan": (sp or {}).get("id", "free")}}
+    )
 
 
 @router.get("/{id}")
@@ -391,6 +399,8 @@ async def get_quotes_by_rfq(id: str, request: Request, user: dict = Depends(get_
         seller = await db.users.find_one({"_id": q["sellerId"]}, projection={"name": 1, "email": 1, "isVerifiedSupplier": 1}) if q.get("sellerId") else None
         score_data = await get_supplier_score_for_response(q["sellerId"]) if q.get("sellerId") else None
         supplier_score = score_data.get("total_score", 0) if score_data else 0
+        s_plan = await get_supplier_plan(db, q["sellerId"]) if q.get("sellerId") else None
+        p_badge = plan_badge_and_flags(s_plan, bool((seller or {}).get("isVerifiedSupplier"))) if s_plan else {}
         quote_score_val = compute_quote_score(q.get("items", []), rfq_items, supplier_score, all_totals)
         doc = serialize_doc(q)
         if doc:
@@ -399,6 +409,8 @@ async def get_quotes_by_rfq(id: str, request: Request, user: dict = Depends(get_
             if doc["sellerId"]:
                 doc["sellerId"]["trustScore"] = supplier_score
                 doc["sellerId"]["trustLevel"] = (score_data or {}).get("trust_level", "Low Trust")
+                for k, v in p_badge.items():
+                    doc["sellerId"][k] = v
             doc["quoteScore"] = quote_score_val
             enrich_quote_dict(doc)
         quotes.append(doc)
@@ -435,6 +447,8 @@ async def get_quote_comparison(id: str, request: Request, user: dict = Depends(g
         available_qty = min((it.get("availableQty") or 0 for it in items), default=0) if items else 0
         seller = await db.users.find_one({"_id": q["sellerId"]}, projection={"name": 1, "email": 1, "isVerifiedSupplier": 1}) if q.get("sellerId") else None
         company = await db.companyprofiles.find_one({"user": q["sellerId"]}, projection={"companyName": 1, "city": 1}) if q.get("sellerId") else None
+        s_plan2 = await get_supplier_plan(db, q["sellerId"]) if q.get("sellerId") else None
+        p2 = plan_badge_and_flags(s_plan2, bool((seller or {}).get("isVerifiedSupplier"))) if s_plan2 else {}
         score_data = await get_supplier_score_for_response(q["sellerId"]) if q.get("sellerId") else None
         supplier_score = score_data.get("total_score", 0) if score_data else 0
         quote_score_val = compute_quote_score(items, rfq_items, supplier_score, all_totals)
@@ -449,6 +463,9 @@ async def get_quote_comparison(id: str, request: Request, user: dict = Depends(g
             "seller_name": (seller or {}).get("name") or (company or {}).get("companyName") or "Supplier",
             "company_name": (company or {}).get("companyName") or "",
             "verified_supplier": bool((seller or {}).get("isVerifiedSupplier")),
+            "subscriptionPlan": p2.get("subscriptionPlan", "free") if p2 else "free",
+            "plan_badge": p2.get("planBadge") if p2 else "Free Supplier",
+            "is_featured_supplier": p2.get("isFeaturedSupplier") if p2 else False,
             "trust_score": supplier_score,
             "trust_level": (score_data or {}).get("trust_level", "Low Trust"),
             "quoted_price": total_amount,
@@ -503,6 +520,8 @@ async def accept_quote(id: str, quoteId: str, request: Request, user: dict = Dep
         "status": "created",
         "createdAt": now,
         "paymentStatus": "payment_pending",
+        "escrowStatus": "not_started",
+        "lastPaymentId": None,
     }
     r = await db.orders.insert_one(order_doc)
     await db.quotes.update_many({"rfqId": rfq_oid}, {"$set": {"status": "rejected"}})

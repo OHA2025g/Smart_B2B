@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Package, Clock, Shield, Check, Truck, Box, Sparkles, Printer } from 'lucide-react';
+import { Package, Clock, Check, Truck, Box, Sparkles, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ordersApi } from '../api/client';
 import { useToast } from '../components/ui/Toast';
@@ -9,6 +9,8 @@ import { Card } from '../components/ui/Card';
 import { formatDateTimeIst } from '../lib/istTime';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { OrderPaymentPanel } from '../components/OrderPaymentPanel';
+import { paymentStatusLabel } from '../components/SupplierPlanBadges';
 
 const LIFECYCLE = [
   { id: 'created', label: 'Created', icon: Package },
@@ -64,7 +66,6 @@ export default function OrderDetail() {
   const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [paymentUpdating, setPaymentUpdating] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -102,22 +103,6 @@ export default function OrderDetail() {
       toast.add('Update failed', 'error');
     } finally {
       setUpdating(false);
-    }
-  };
-
-  const handlePayment = async (paymentStatus) => {
-    setPaymentUpdating(true);
-    try {
-      await ordersApi.updatePayment(id, paymentStatus);
-      const { data } = await ordersApi.getById(id);
-      setOrder(data.data.order);
-      const tr = await ordersApi.getTimeline(id);
-      setTimeline(tr.data.data.timeline || []);
-      toast.add('Payment status updated', 'success');
-    } catch {
-      toast.add('Update failed', 'error');
-    } finally {
-      setPaymentUpdating(false);
     }
   };
 
@@ -374,8 +359,8 @@ export default function OrderDetail() {
           <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50/80 p-4 text-sm text-slate-700">
             <p className="font-semibold text-slate-900 mb-1">Payment &amp; escrow</p>
             <p className="text-xs leading-relaxed">
-              On-platform escrow and milestone releases are not active in this demo build. Settlement terms follow your
-              negotiated quote and offline arrangements.
+              This document references the agreed commercial terms. Optional on-platform <strong>demo escrow</strong> (see
+              the order page) simulates hold and release for evaluation only; no real funds move.
             </p>
           </div>
           <p className="mt-4 text-xs text-slate-500">
@@ -389,67 +374,23 @@ export default function OrderDetail() {
         </div>
       </Card>
 
-      <Card className="print:hidden border-slate-200/90">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="section-title flex items-center gap-2">
-              <Shield className="h-5 w-5 text-teal-600" />
-              Escrow payment protection
-            </h2>
-            <Badge variant="primary">{(order.paymentStatus || 'payment_pending').replace(/_/g, ' ')}</Badge>
-          </div>
-          <p className="text-xs text-slate-500 mt-2 max-w-3xl">
-            Communication is monitored to maintain buyer-seller trust. No real payment provider is connected—use the demo
-            actions to walk through a typical release workflow.
-          </p>
+      <div className="print:hidden max-w-4xl">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500 uppercase">Payment status</span>
+          <Badge variant="primary" className="text-xs">
+            {paymentStatusLabel(order.paymentStatus || 'payment_pending')}
+          </Badge>
         </div>
-        <ol className="p-5 sm:p-6 space-y-2 text-sm text-slate-700 list-decimal list-inside">
-          <li>Buyer initiates payment</li>
-          <li>B2Bभारत holds amount securely (escrow)</li>
-          <li>Seller ships goods (order status)</li>
-          <li>Buyer confirms delivery</li>
-          <li>Payment released to seller (or refunded if applicable)</li>
-        </ol>
-        <div className="px-5 pb-5 flex flex-wrap gap-2 print:hidden">
-          <Button
-            type="button"
-            size="sm"
-            disabled={paymentUpdating}
-            onClick={() => handlePayment('payment_pending')}
-            variant="secondary"
-          >
-            1. Mark payment initiated
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={paymentUpdating}
-            onClick={() => handlePayment('escrow_held')}
-            variant="secondary"
-          >
-            2. Mark escrow held
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={paymentUpdating}
-            onClick={() => handlePayment('released')}
-            variant="primary"
-          >
-            3. Mark released
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={paymentUpdating}
-            onClick={() => handlePayment('refunded')}
-            variant="ghost"
-            className="text-amber-700"
-          >
-            Mark refunded
-          </Button>
-        </div>
-      </Card>
+        <OrderPaymentPanel
+          order={order}
+          orderId={id}
+          user={user}
+          onOrderUpdate={(o) => {
+            setOrder(o);
+            ordersApi.getTimeline(id).then((r) => setTimeline(r.data.data.timeline || [])).catch(() => {});
+          }}
+        />
+      </div>
 
 
 

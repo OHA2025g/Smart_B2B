@@ -7,4 +7,11 @@ class OrderStatusUpdate(BaseModel):
 
 
 class OrderPaymentUpdate(BaseModel):
-    paymentStatus: Literal["payment_pending", "escrow_held", "released", "refunded"]
+    paymentStatus: Literal[
+        "payment_pending",
+        "initiated",
+        "payment_failed",
+        "escrow_held",
+        "released",
+        "refunded",
+    ]

@@ -91,6 +91,7 @@ export function Navbar() {
                   <>
                     <NavLink to="/seller/products">My Products</NavLink>
                     <NavLink to="/seller/rfqs">RFQs</NavLink>
+                    <NavLink to="/seller/subscription">Subscription</NavLink>
                     <NavLink to="/orders">Orders</NavLink>
                     <NavLink to="/profile/company">Company</NavLink>
                   </>
