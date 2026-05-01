@@ -14,7 +14,7 @@ from scripts.demo_plans_payments import apply_demo_plans_payments
 import random
 import re
 from datetime import datetime, timedelta
-from scripts.mongo_env import resolve_db_name, resolve_mongodb_uri
+from scripts.mongo_env import describe_connection, resolve_db_name, resolve_mongodb_uri
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -997,6 +997,7 @@ async def run():
     client = AsyncIOMotorClient(uri)
     db = client[_db_name()]
     print("Connected to MongoDB")
+    print(" ", describe_connection(uri))
 
     print("1. Ensuring preserved users...")
     admin_id, seller_id, buyer_id, free_id, go_id, pro_id = await ensure_preserved_users(db)

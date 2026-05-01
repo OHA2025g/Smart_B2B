@@ -22,3 +22,11 @@ def resolve_db_name(uri: str | None = None) -> str:
     if db and str(db).strip():
         return str(db).strip()
     return "smartb2b"
+
+
+def describe_connection(uri: str | None = None) -> str:
+    uri = uri or resolve_mongodb_uri()
+    dbn = resolve_db_name(uri)
+    p = urlparse(uri)
+    port = p.port or 27017
+    return f"database={dbn!r} host={p.hostname!r} port={port}"

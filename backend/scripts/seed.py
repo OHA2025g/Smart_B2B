@@ -2,11 +2,24 @@
 Seed script.
 
 Default: full marketplace demo (scripts.generate_demo_data — large dataset, clears non-preserved data).
-Minimal legacy seed: set SEED_MINIMAL=1
+Takes many minutes; do not interrupt.
 
-Run: python -m scripts.seed (set MONGO_URL or MONGODB_URI; DB_NAME if URI has no /dbname path)
+Quick seed (admin + categories + a few users only): set SEED_MINIMAL=1
+
+Environment (same as the app):
+  MONGO_URL or MONGODB_URI or DATABASE_URL — Mongo connection string
+  DB_NAME or MONGO_DB_NAME — database name when the URI has no /dbname path
+
+Examples:
+
+  # Quick seed into remote DB "b2b" (recommended first run)
+  SEED_MINIMAL=1 DB_NAME=b2b MONGO_URL='mongodb://USER:PASS@HOST:PORT/?tls=false' python -m scripts.seed
+
+  # Full demo (260+ sellers, etc.) — same env, no SEED_MINIMAL
+  DB_NAME=b2b MONGO_URL='mongodb://USER:PASS@HOST:PORT/?tls=false' python -m scripts.seed
 """
 import asyncio
+import datetime
 import os
 import re
 from bson import ObjectId
@@ -14,7 +27,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 
-from scripts.mongo_env import resolve_db_name, resolve_mongodb_uri
+from scripts.mongo_env import describe_connection, resolve_db_name, resolve_mongodb_uri
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -34,6 +47,7 @@ async def seed():
     client = AsyncIOMotorClient(uri)
     db = client[resolve_db_name(uri)]
     print("Connected to MongoDB (SEED_MINIMAL mode)")
+    print(" ", describe_connection(uri))
 
     admin_email = "admin@smartb2b.com"
     admin_password = "Admin@123"
