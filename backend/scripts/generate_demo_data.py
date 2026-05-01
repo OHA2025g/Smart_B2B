@@ -14,7 +14,7 @@ from scripts.demo_plans_payments import apply_demo_plans_payments
 import random
 import re
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from scripts.mongo_env import resolve_db_name, resolve_mongodb_uri
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -26,7 +26,6 @@ try:
 except ImportError:
     fake = None
 
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/smartb2b")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 PRESERVED_EMAILS = {
@@ -77,9 +76,7 @@ TRUST_LEVELS = [(85, 100, "Highly Trusted"), (70, 85, "Trusted"), (50, 70, "Mode
 
 
 def _db_name():
-    path = urlparse(MONGODB_URI).path
-    name = (path or "/").strip("/").split("/")[0].split("?")[0]
-    return name or "smartb2b"
+    return resolve_db_name()
 
 
 def slug(s):
@@ -996,7 +993,8 @@ async def apply_classroom_tier_showcase(db, free_id, go_id, pro_id, category_nam
     print("  Applied classroom FREE/GO/PRO showcase companies + products.")
 
 async def run():
-    client = AsyncIOMotorClient(MONGODB_URI)
+    uri = resolve_mongodb_uri()
+    client = AsyncIOMotorClient(uri)
     db = client[_db_name()]
     print("Connected to MongoDB")
 

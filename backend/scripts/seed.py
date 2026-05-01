@@ -4,25 +4,19 @@ Seed script.
 Default: full marketplace demo (scripts.generate_demo_data — large dataset, clears non-preserved data).
 Minimal legacy seed: set SEED_MINIMAL=1
 
-Run: python -m scripts.seed (ensure MONGODB_URI is set and DB is running)
+Run: python -m scripts.seed (set MONGO_URL or MONGODB_URI; DB_NAME if URI has no /dbname path)
 """
 import asyncio
 import os
 import re
 from bson import ObjectId
 
-from urllib.parse import urlparse
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/smartb2b")
+from scripts.mongo_env import resolve_db_name, resolve_mongodb_uri
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def _db_name():
-    path = urlparse(MONGODB_URI).path
-    name = (path or "/").strip("/").split("/")[0].split("?")[0]
-    return name or "smartb2b"
 
 
 def slug(s):
@@ -36,8 +30,9 @@ async def seed():
         await run_bulk_demo()
         return
 
-    client = AsyncIOMotorClient(MONGODB_URI)
-    db = client[_db_name()]
+    uri = resolve_mongodb_uri()
+    client = AsyncIOMotorClient(uri)
+    db = client[resolve_db_name(uri)]
     print("Connected to MongoDB (SEED_MINIMAL mode)")
 
     admin_email = "admin@smartb2b.com"
