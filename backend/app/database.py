@@ -12,7 +12,11 @@ _db = None
 def _db_name() -> str:
     path = urlparse(settings.mongodb_uri).path
     name = (path or "/").strip("/").split("/")[0].split("?")[0]
-    return name or "smartb2b"
+    if name:
+        return name
+    if settings.db_name and str(settings.db_name).strip():
+        return str(settings.db_name).strip()
+    return "smartb2b"
 
 
 def get_client() -> AsyncIOMotorClient:
