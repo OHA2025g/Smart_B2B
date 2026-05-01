@@ -1,5 +1,8 @@
-from urllib.parse import urlparse
+﻿from urllib.parse import urlparse
+
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import ServerSelectionTimeoutError
+
 from app.config import settings
 
 _client: AsyncIOMotorClient | None = None
@@ -28,7 +31,14 @@ def get_db():
 
 async def connect_db():
     client = get_client()
-    await client.admin.command("ping")
+    try:
+        await client.admin.command("ping")
+    except ServerSelectionTimeoutError as e:
+        raise RuntimeError(
+            "MongoDB is unreachable. In Docker/EasyPanel, set MONGODB_URI (or MONGO_URL) to your "
+            "MongoDB service hostname on the same network — not localhost unless Mongo runs in "
+            "the same container. Example: mongodb://mongo:27017/smartb2b"
+        ) from e
     print("MongoDB connected")
 
 

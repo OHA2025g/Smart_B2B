@@ -1,15 +1,24 @@
-from pydantic_settings import BaseSettings
+﻿from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
     port: int = 5000
     node_env: str = "development"
-    mongodb_uri: str = "mongodb://localhost:27017/smartb2b"
+    mongodb_uri: str = Field(
+        default="mongodb://localhost:27017/smartb2b",
+        validation_alias=AliasChoices("MONGODB_URI", "MONGO_URL", "DATABASE_URL"),
+    )
     jwt_secret: str = "dev-secret-change-in-production"
     jwt_expires_in: str = "7d"
     cors_origin: str = "http://localhost:5173"
-
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore", "populate_by_name": True}
 
     @property
     def cors_origins_list(self) -> list[str]:
